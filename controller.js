@@ -1,5 +1,5 @@
 function main() {
-    const serverUrl = 'http://VOTRE_IP_OU_DOMAINE_SERVEUR:8888';
+    const serverUrl = 'http://miaou.vps.webdock.cloud:8888';
     let socket = null;
     let sessionCode = '';
 
