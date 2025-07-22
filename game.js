@@ -1,20 +1,3 @@
-class PreloadScene extends Phaser.Scene {
-    constructor() {
-        super({ key: 'PreloadScene' });
-    }
-
-    preload() {
-        this.load.image('road', 'https://i.imgur.com/qB4y3c1.png');
-        this.load.image('car', 'https://i.imgur.com/x6e551j.png');
-        this.load.image('obstacle', 'https://i.imgur.com/V3iU0a9.png');
-    }
-
-    create() {
-        this.scene.start('LobbyScene');
-    }
-}
-
-
 class LobbyScene extends Phaser.Scene {
     constructor() {
         super({ key: 'LobbyScene' });
@@ -84,9 +67,9 @@ class GameScene extends Phaser.Scene {
         this.player = null;
         this.obstacles = null;
         this.scoreText = null;
-        this.road = null;
+        this.laneLines = null;
         this.isGameRunning = false;
-        this.scrollSpeed = 5;
+        this.scrollSpeed = 8;
         this.timer = 0;
     }
 
@@ -95,8 +78,13 @@ class GameScene extends Phaser.Scene {
     }
 
     create() {
-        this.road = this.add.tileSprite(400, 300, 800, 600, 'road');
-        this.player = this.physics.add.sprite(400, 500, 'car').setCollideWorldBounds(true);
+        this.createGraphics();
+        
+        this.add.rectangle(400, 300, 800, 600, 0x404040); 
+        this.laneLines = this.physics.add.group();
+        this.time.addEvent({ delay: 200, callback: this.spawnLaneLine, callbackScope: this, loop: true });
+
+        this.player = this.physics.add.sprite(400, 500, 'car_texture').setCollideWorldBounds(true);
         this.obstacles = this.physics.add.group();
         this.physics.add.collider(this.player, this.obstacles, this.gameOver, null, this);
         this.scoreText = this.add.text(16, 16, 'Score: 0', { fontSize: '32px', fill: '#FFF' });
@@ -104,14 +92,47 @@ class GameScene extends Phaser.Scene {
         this.setupSocketListeners();
         this.startCountdown();
     }
+    
+    createGraphics() {
+        const carGraphics = this.make.graphics({ x: 0, y: 0, add: false });
+        carGraphics.fillStyle(0xff0000, 1.0);
+        carGraphics.fillRect(0, 0, 40, 80);
+        carGraphics.generateTexture('car_texture', 40, 80);
+        carGraphics.destroy();
+        
+        const obstacleGraphics = this.make.graphics({ x: 0, y: 0, add: false });
+        obstacleGraphics.fillStyle(0x8B4513, 1.0);
+        obstacleGraphics.fillRect(0, 0, 60, 60);
+        obstacleGraphics.generateTexture('obstacle_texture', 60, 60);
+        obstacleGraphics.destroy();
+        
+        const lineGraphics = this.make.graphics({ x: 0, y: 0, add: false });
+        lineGraphics.fillStyle(0xFFFF00, 1.0);
+        lineGraphics.fillRect(0, 0, 10, 40);
+        lineGraphics.generateTexture('line_texture', 10, 40);
+        lineGraphics.destroy();
+    }
 
     update(time) {
         if (!this.isGameRunning) {
             return;
         }
-        this.road.tilePositionY -= this.scrollSpeed;
-        this.scrollSpeed += 0.005; 
         
+        this.scrollSpeed += 0.005;
+        this.physics.world.setBounds(0, 0, 800, 600);
+        
+        this.laneLines.children.iterate(line => {
+            if (line && line.y > 650) {
+                line.destroy();
+            }
+        });
+        
+        this.obstacles.children.iterate(obstacle => {
+            if (obstacle && obstacle.y > 650) {
+                obstacle.destroy();
+            }
+        });
+
         this.timer = time;
         this.scoreText.setText('Score: ' + Math.floor(time / 100));
     }
@@ -125,11 +146,11 @@ class GameScene extends Phaser.Scene {
     }
 
     handlePlayerInput(action) {
-        const moveDistance = 300;
+        const moveSpeed = 350;
         if (action === 'left') {
-            this.player.setVelocityX(-moveDistance);
+            this.player.setVelocityX(-moveSpeed);
         } else if (action === 'right') {
-            this.player.setVelocityX(moveDistance);
+            this.player.setVelocityX(moveSpeed);
         }
     }
     
@@ -165,21 +186,28 @@ class GameScene extends Phaser.Scene {
             loop: true
         });
     }
+    
+    spawnLaneLine() {
+        if (!this.isGameRunning) return;
+        const line = this.laneLines.create(400, -40, 'line_texture');
+        line.setVelocityY(this.scrollSpeed * 60);
+    }
 
     spawnObstacle() {
         if (!this.isGameRunning) return;
         const x = Phaser.Math.Between(100, 700);
-        const obstacle = this.obstacles.create(x, -50, 'obstacle');
-        obstacle.setVelocityY(this.scrollSpeed * 60); 
+        const obstacle = this.obstacles.create(x, -50, 'obstacle_texture');
+        obstacle.setVelocityY(this.scrollSpeed * 30); 
     }
 
     gameOver() {
+        if (!this.isGameRunning) return;
         this.isGameRunning = false;
         this.physics.pause();
         this.player.setTint(0xff0000);
         this.socket.emit('game_over', { score: Math.floor(this.timer / 100) });
 
-        const gameOverText = this.add.text(this.cameras.main.centerX, this.cameras.main.centerY, 'GAME OVER', { fontSize: '64px', fill: '#ff0000' }).setOrigin(0.5);
+        this.add.text(this.cameras.main.centerX, this.cameras.main.centerY, 'GAME OVER', { fontSize: '64px', fill: '#ff0000' }).setOrigin(0.5);
     }
 }
 
@@ -194,7 +222,7 @@ const config = {
             gravity: { y: 0 }
         }
     },
-    scene: [PreloadScene, LobbyScene, GameScene]
+    scene: [LobbyScene, GameScene]
 };
 
 const game = new Phaser.Game(config);
