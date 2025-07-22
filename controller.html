@@ -1,35 +1,101 @@
-<!DOCTYPE html>
-<html lang="fr">
-<head>
-    <meta charset="UTF-8">
-    <meta name="viewport" content="width=device-width, initial-scale=1.0, user-scalable=no">
-    <title>Manette</title>
-    <style>
-        body { font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Helvetica, Arial, sans-serif; display: flex; flex-direction: column; justify-content: center; align-items: center; height: 100vh; margin: 0; background-color: #222; color: white; touch-action: manipulation; }
-        .hidden { display: none !important; }
-        #connection-wrapper { text-align: center; }
-        #connection-wrapper input { font-size: 24px; text-align: center; width: 200px; padding: 10px; margin-bottom: 15px; text-transform: uppercase; }
-        #connection-wrapper button { font-size: 20px; padding: 12px 24px; }
-        #controls-wrapper { display: flex; justify-content: space-around; width: 100%; }
-        .control-button { width: 120px; height: 120px; font-size: 50px; border: 2px solid white; background-color: #444; color: white; user-select: none; -webkit-user-select: none; }
-        #status { position: absolute; top: 20px; font-size: 16px; color: #aaa; }
-    </style>
-</head>
-<body>
+function main() {
+    const serverUrl = "https://miaou.vps.webdock.cloud";
+    const socketOptions = {
+        path: "/racer/socket.io/"
+    };
+    let socket = null;
+    let sessionCode = '';
 
-    <div id="status">En attente...</div>
+    const statusDiv = document.getElementById('status');
+    const connectionWrapper = document.getElementById('connection-wrapper');
+    const controlsWrapper = document.getElementById('controls-wrapper');
+    const gameOverWrapper = document.getElementById('game-over-wrapper');
+    
+    const sessionCodeInput = document.getElementById('session-code-input');
+    const connectButton = document.getElementById('connect-button');
+    const leftButton = document.getElementById('left-button');
+    const rightButton = document.getElementById('right-button');
+    const finalScoreText = document.getElementById('final-score');
+    const restartButton = document.getElementById('restart-button');
 
-    <div id="connection-wrapper">
-        <input type="text" id="session-code-input" placeholder="CODE" maxlength="6">
-        <button id="connect-button">Connexion</button>
-    </div>
+    function setStatus(message) {
+        if (statusDiv) {
+            statusDiv.textContent = message;
+        }
+    }
+    
+    function showView(viewName) {
+        connectionWrapper.classList.add('hidden');
+        controlsWrapper.classList.add('hidden');
+        gameOverWrapper.classList.add('hidden');
+        
+        if (viewName === 'connect') {
+            connectionWrapper.classList.remove('hidden');
+            setStatus('En attente...');
+        } else if (viewName === 'controls') {
+            controlsWrapper.classList.remove('hidden');
+            setStatus(`Connecté à la session ${sessionCode}`);
+        } else if (viewName === 'gameover') {
+            gameOverWrapper.classList.remove('hidden');
+            setStatus('Partie terminée !');
+        }
+    }
 
-    <div id="controls-wrapper" class="hidden">
-        <button id="left-button" class="control-button">◄</button>
-        <button id="right-button" class="control-button">►</button>
-    </div>
+    function setupSocketEvents() {
+        socket.on('connect', () => setStatus('Connecté au serveur'));
+        socket.on('disconnect', () => {
+            setStatus('Déconnecté');
+            showView('connect');
+        });
+        socket.on('invalid_session', () => setStatus('Code de session invalide.'));
+        socket.on('connection_successful', () => showView('controls'));
+        socket.on('game_over', (data) => {
+            if (data && typeof data.score !== 'undefined') {
+                finalScoreText.textContent = data.score;
+            }
+            showView('gameover');
+        });
+    }
 
-    <script src="https://cdn.socket.io/4.7.5/socket.io.min.js"></script>
-    <script src="controller.js"></script>
-</body>
-</html>
+    function emitPlayerInput(action) {
+        if (socket && socket.connected) {
+            socket.emit('player_input', { sessionCode, action });
+        }
+    }
+    
+    function connect() {
+        sessionCode = sessionCodeInput.value.toUpperCase();
+        if (sessionCode.length !== 6) {
+            setStatus('Le code doit faire 6 caractères.');
+            return;
+        }
+        
+        setStatus('Tentative de connexion...');
+        socket = io(serverUrl, socketOptions);
+        setupSocketEvents();
+        socket.on('connect', () => {
+             socket.emit('join_session', { sessionCode });
+        });
+    }
+    
+    function restartPage() {
+        window.location.reload();
+    }
+
+    if (connectButton) {
+        connectButton.addEventListener('click', connect);
+    }
+    if (leftButton) {
+        leftButton.addEventListener('click', () => emitPlayerInput('left'));
+    }
+    if (rightButton) {
+        rightButton.addEventListener('click', () => emitPlayerInput('right'));
+    }
+    if (restartButton) {
+        restartButton.addEventListener('click', restartPage);
+    }
+    
+    showView('connect');
+}
+
+main();
