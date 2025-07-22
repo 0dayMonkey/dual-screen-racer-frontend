@@ -78,7 +78,7 @@ class GameScene extends Phaser.Scene {
     }
 
     create() {
-        this.createGraphics();
+        GraphicsGenerator.createAllTextures(this);
         
         this.add.rectangle(400, 300, 800, 600, 0x404040); 
         this.laneLines = this.physics.add.group();
@@ -87,30 +87,10 @@ class GameScene extends Phaser.Scene {
         this.player = this.physics.add.sprite(400, 500, 'car_texture').setCollideWorldBounds(true);
         this.obstacles = this.physics.add.group();
         this.physics.add.collider(this.player, this.obstacles, this.gameOver, null, this);
-        this.scoreText = this.add.text(16, 16, 'Score: 0', { fontSize: '32px', fill: '#FFF' });
+        this.scoreText = this.add.text(16, 16, 'Score: 0', { fontSize: '32px', fill: '#FFF', fontStyle: 'bold' });
 
         this.setupSocketListeners();
         this.startCountdown();
-    }
-    
-    createGraphics() {
-        const carGraphics = this.make.graphics({ x: 0, y: 0, add: false });
-        carGraphics.fillStyle(0xff0000, 1.0);
-        carGraphics.fillRect(0, 0, 40, 80);
-        carGraphics.generateTexture('car_texture', 40, 80);
-        carGraphics.destroy();
-        
-        const obstacleGraphics = this.make.graphics({ x: 0, y: 0, add: false });
-        obstacleGraphics.fillStyle(0x8B4513, 1.0);
-        obstacleGraphics.fillRect(0, 0, 60, 60);
-        obstacleGraphics.generateTexture('obstacle_texture', 60, 60);
-        obstacleGraphics.destroy();
-        
-        const lineGraphics = this.make.graphics({ x: 0, y: 0, add: false });
-        lineGraphics.fillStyle(0xFFFF00, 1.0);
-        lineGraphics.fillRect(0, 0, 10, 40);
-        lineGraphics.generateTexture('line_texture', 10, 40);
-        lineGraphics.destroy();
     }
 
     update(time) {
@@ -119,25 +99,17 @@ class GameScene extends Phaser.Scene {
         }
         
         this.scrollSpeed += 0.005;
-        this.physics.world.setBounds(0, 0, 800, 600);
         
-        // --- NOUVELLE PHYSIQUE ---
-        // Applique une friction pour que la voiture se redresse.
         if (this.player.body.velocity.x !== 0) {
             this.player.setVelocityX(this.player.body.velocity.x * 0.95);
         }
-        // --- FIN DE LA NOUVELLE PHYSIQUE ---
         
         this.laneLines.children.iterate(line => {
-            if (line && line.y > 650) {
-                line.destroy();
-            }
+            if (line && line.y > 650) { line.destroy(); }
         });
         
         this.obstacles.children.iterate(obstacle => {
-            if (obstacle && obstacle.y > 650) {
-                obstacle.destroy();
-            }
+            if (obstacle && obstacle.y > 650) { obstacle.destroy(); }
         });
 
         this.timer = time;
@@ -153,7 +125,7 @@ class GameScene extends Phaser.Scene {
     }
 
     handlePlayerInput(action) {
-        const moveForce = 400; // Augmenté pour donner une impulsion plus forte
+        const moveForce = 400;
         if (action === 'left') {
             this.player.setVelocityX(-moveForce);
         } else if (action === 'right') {
@@ -162,7 +134,7 @@ class GameScene extends Phaser.Scene {
     }
     
     startCountdown() {
-        const countdownText = this.add.text(this.cameras.main.centerX, this.cameras.main.centerY, '3', { fontSize: '96px', fill: '#FFF' }).setOrigin(0.5);
+        const countdownText = this.add.text(this.cameras.main.centerX, this.cameras.main.centerY, '3', { fontSize: '128px', fill: '#FFF', fontStyle: 'bold' }).setOrigin(0.5);
         let count = 3;
         
         const timerEvent = this.time.addEvent({
@@ -187,7 +159,7 @@ class GameScene extends Phaser.Scene {
         this.isGameRunning = true;
         this.timer = 0;
         this.time.addEvent({
-            delay: 1500, // Le temps entre chaque obstacle
+            delay: 1500,
             callback: this.spawnObstacle,
             callbackScope: this,
             loop: true
@@ -207,14 +179,24 @@ class GameScene extends Phaser.Scene {
         obstacle.setVelocityY(this.scrollSpeed * 30); 
     }
 
-    gameOver() {
+    gameOver(player, obstacle) {
         if (!this.isGameRunning) return;
         this.isGameRunning = false;
         this.physics.pause();
-        this.player.setTint(0xff0000);
+        
+        const particles = this.add.particles(0, 0, 'particle_texture', {
+            speed: 200,
+            scale: { start: 1, end: 0 },
+            blendMode: 'ADD',
+            lifespan: 600
+        });
+        particles.createEmitter().explode(32, player.x, player.y);
+        
+        player.destroy();
+        
         this.socket.emit('game_over', { score: Math.floor(this.timer / 100) });
 
-        this.add.text(this.cameras.main.centerX, this.cameras.main.centerY, 'GAME OVER', { fontSize: '64px', fill: '#ff0000' }).setOrigin(0.5);
+        this.add.text(this.cameras.main.centerX, this.cameras.main.centerY, 'GAME OVER', { fontSize: '64px', fill: '#ff0000', fontStyle: 'bold' }).setOrigin(0.5);
     }
 }
 
