@@ -1,61 +1,20 @@
 class LobbyScene extends Phaser.Scene {
-    constructor() {
-        super({ key: 'LobbyScene' });
-        this.socket = null;
-        this.sessionCodeText = null;
-    }
-
+    constructor() { super({ key: 'LobbyScene' }); }
     create() {
-        this.initializeText();
-        this.initializeSocketConnection();
-        this.setupSocketEvents();
-    }
-
-    initializeText() {
-        const screenCenterX = this.cameras.main.worldView.x + this.cameras.main.width / 2;
-        const screenCenterY = this.cameras.main.worldView.y + this.cameras.main.height / 2;
-
-        this.sessionCodeText = this.add.text(screenCenterX, screenCenterY, 'Connexion en cours...', {
-            fontSize: '40px',
-            fontFamily: '"Courier New", Courier, monospace',
-            color: '#ffffff',
-            align: 'center',
-            wordWrap: { width: this.cameras.main.width - 40 }
-        }).setOrigin(0.5);
-    }
-
-    initializeSocketConnection() {
-        this.socket = io("https://miaou.vps.webdock.cloud", {
-            path: "/racer/socket.io/"
+        this.add.text(400, 300, 'Connexion en cours...', { fontSize: '40px', fontFamily: '"Courier New", Courier', color: '#ffffff', align: 'center' }).setOrigin(0.5);
+        const socket = io("https://miaou.vps.webdock.cloud", { path: "/racer/socket.io/" });
+        socket.on('connect', () => {
+            this.add.text(400, 300, 'Demande de session...').setOrigin(0.5).setColor('#ffff00');
+            socket.emit('create_session');
         });
-    }
-    
-    setupSocketEvents() {
-        this.socket.on('connect', () => {
-            this.sessionCodeText.setText('Demande de session...');
-            this.socket.emit('create_session');
+        socket.on('session_created', (data) => {
+            if (data && data.sessionCode) {
+                this.add.text(400, 300, `Entrez ce code sur votre manette :\n\n${data.sessionCode}`, {align: 'center', fontSize: '40px'}).setOrigin(0.5);
+            }
         });
-
-        this.socket.on('session_created', (data) => {
-            this.handleSessionCreated(data);
+        socket.on('connection_successful', () => {
+             this.scene.start('GameScene', { socket: socket });
         });
-        
-        this.socket.on('connection_successful', () => {
-             this.scene.start('GameScene', { socket: this.socket });
-        });
-
-        this.socket.on('disconnect', () => {
-            this.sessionCodeText.setText('Déconnecté du serveur.');
-        });
-    }
-
-    handleSessionCreated(data) {
-        if (data && data.sessionCode) {
-            const code = data.sessionCode;
-            this.sessionCodeText.setText(`Entrez ce code sur votre manette :\n\n${code}`);
-        } else {
-            this.sessionCodeText.setText('Erreur : Code de session non reçu.');
-        }
     }
 }
 
@@ -66,11 +25,11 @@ class GameScene extends Phaser.Scene {
         this.socket = null;
         this.player = null;
         this.obstacles = null;
+        this.road = null;
         this.scoreText = null;
-        this.laneLines = null;
         this.isGameRunning = false;
-        this.scrollSpeed = 8;
-        this.timer = 0;
+        this.turning = 'none'; 
+        this.forwardSpeed = 400; 
     }
 
     init(data) {
@@ -80,72 +39,75 @@ class GameScene extends Phaser.Scene {
     create() {
         GraphicsGenerator.createAllTextures(this);
         
-        this.add.rectangle(400, 300, 800, 600, 0x404040); 
-        this.laneLines = this.physics.add.group();
-        this.time.addEvent({ delay: 200, callback: this.spawnLaneLine, callbackScope: this, loop: true });
+        this.road = this.add.tileSprite(400, 300, 1600, 1200, 'road_texture');
+        
+        this.player = this.physics.add.sprite(400, 500, 'car_texture');
+        this.player.setDamping(true);
+        this.player.setDrag(0.98);
+        this.player.setAngularDrag(400);
+        this.player.setMaxVelocity(600);
 
-        this.player = this.physics.add.sprite(400, 500, 'car_texture').setCollideWorldBounds(true);
-        this.obstacles = this.physics.add.group();
-        this.physics.add.collider(this.player, this.obstacles, this.gameOver, null, this);
-        this.scoreText = this.add.text(16, 16, 'Score: 0', { fontSize: '32px', fill: '#FFF', fontStyle: 'bold' });
+        this.cameras.main.startFollow(this.player, true, 0.09, 0.09);
+        this.cameras.main.setZoom(1.2);
 
+        this.obstacles = this.physics.add.group({ immovable: true });
+        this.physics.add.collider(this.player, this.obstacles);
+        
+        this.scoreText = this.add.text(0, 0, 'Score: 0', { fontSize: '24px', fill: '#FFF', fontStyle: 'bold' }).setScrollFactor(0);
+        
         this.setupSocketListeners();
         this.startCountdown();
     }
-
+    
     update(time) {
-        if (!this.isGameRunning) {
-            return;
-        }
-        
-        this.scrollSpeed += 0.005;
-        
-        if (this.player.body.velocity.x !== 0) {
-            this.player.setVelocityX(this.player.body.velocity.x * 0.95);
-        }
-        
-        this.laneLines.children.iterate(line => {
-            if (line && line.y > 650) { line.destroy(); }
-        });
-        
-        this.obstacles.children.iterate(obstacle => {
-            if (obstacle && obstacle.y > 650) { obstacle.destroy(); }
-        });
+        if (!this.isGameRunning) return;
 
-        this.timer = time;
-        this.scoreText.setText('Score: ' + Math.floor(time / 100));
+        this.updatePlayerMovement();
+        
+        this.road.tilePositionY = this.player.y;
+
+        if (this.player.y > this.cameras.main.scrollY + this.cameras.main.height + 200) {
+            this.gameOver();
+        }
+
+        this.scoreText.setText('Score: ' + Math.floor(this.player.y / -10));
+        this.spawnObstaclesIfNeeded();
     }
     
+    updatePlayerMovement() {
+        const angularVelocity = 300;
+        if (this.turning === 'left') {
+            this.player.setAngularVelocity(-angularVelocity);
+        } else if (this.turning === 'right') {
+            this.player.setAngularVelocity(angularVelocity);
+        } else {
+            this.player.setAngularVelocity(0);
+        }
+
+        // Toujours avancer dans la direction où la voiture pointe
+        // La rotation de 0 est vers la droite, donc on soustrait 90 degrés (PI/2) pour pointer vers le haut
+        this.physics.velocityFromRotation(this.player.rotation - Math.PI / 2, this.forwardSpeed, this.player.body.velocity);
+    }
+
     setupSocketListeners() {
-        this.socket.on('game_state_update', (data) => {
-            if (this.isGameRunning && data && data.action) {
-                this.handlePlayerInput(data.action);
-            }
+        this.socket.on('start_turn', (data) => {
+            if (data && data.direction) this.turning = data.direction;
+        });
+        this.socket.on('stop_turn', () => {
+            this.turning = 'none';
         });
     }
 
-    handlePlayerInput(action) {
-        const moveForce = 400;
-        if (action === 'left') {
-            this.player.setVelocityX(-moveForce);
-        } else if (action === 'right') {
-            this.player.setVelocityX(moveForce);
-        }
-    }
-    
     startCountdown() {
-        const countdownText = this.add.text(this.cameras.main.centerX, this.cameras.main.centerY, '3', { fontSize: '128px', fill: '#FFF', fontStyle: 'bold' }).setOrigin(0.5);
+         const countdownText = this.add.text(this.cameras.main.centerX, this.cameras.main.centerY, '3', { fontSize: '128px', fill: '#FFF', fontStyle: 'bold' }).setOrigin(0.5).setScrollFactor(0);
         let count = 3;
-        
         const timerEvent = this.time.addEvent({
             delay: 1000,
             callback: () => {
                 count--;
-                if (count > 0) {
-                    countdownText.setText(String(count));
-                } else if (count === 0) {
-                    countdownText.setText('GO!');
-                } else {
+                if (count > 0) countdownText.setText(String(count));
+                else if (count === 0) countdownText.setText('GO!');
+                else {
                     countdownText.destroy();
                     this.startGame();
                     timerEvent.remove();
@@ -157,50 +119,33 @@ class GameScene extends Phaser.Scene {
 
     startGame() {
         this.isGameRunning = true;
-        this.timer = 0;
-        this.time.addEvent({
-            delay: 1500,
-            callback: this.spawnObstacle,
-            callbackScope: this,
-            loop: true
-        });
-    }
-    
-    spawnLaneLine() {
-        if (!this.isGameRunning) return;
-        const line = this.laneLines.create(400, -40, 'line_texture');
-        line.setVelocityY(this.scrollSpeed * 60);
     }
 
-    spawnObstacle() {
-        if (!this.isGameRunning) return;
-        const x = Phaser.Math.Between(100, 700);
-        const obstacle = this.obstacles.create(x, -50, 'obstacle_texture');
-        obstacle.setVelocityY(this.scrollSpeed * 30); 
+    spawnObstaclesIfNeeded() {
+        const spawnDistance = 800;
+        while (this.obstacles.getLength() < 20) {
+            const y = this.player.y - spawnDistance - (Math.random() * spawnDistance);
+            const x = Phaser.Math.Between(100, 700);
+            this.obstacles.create(x, y, 'obstacle_texture');
+        }
     }
 
-    gameOver(player, obstacle) {
+    gameOver() {
         if (!this.isGameRunning) return;
         this.isGameRunning = false;
         this.physics.pause();
         
         const particles = this.add.particles(0, 0, 'particle_texture', {
-            speed: 200,
-            scale: { start: 1, end: 0 },
-            blendMode: 'ADD',
-            lifespan: 600
+            speed: 200, scale: { start: 1, end: 0 }, blendMode: 'ADD', lifespan: 600
         });
-        particles.createEmitter().explode(32, player.x, player.y);
+        particles.createEmitter().explode(32, this.player.x, this.player.y);
         
-        player.destroy();
-        
-        this.socket.emit('game_over', { score: Math.floor(this.timer / 100) });
-
-        this.add.text(this.cameras.main.centerX, this.cameras.main.centerY, 'GAME OVER', { fontSize: '64px', fill: '#ff0000', fontStyle: 'bold' }).setOrigin(0.5);
+        this.player.destroy();
+        this.socket.emit('game_over', { score: Math.floor(this.player.y / -10) });
     }
 }
 
-
+// NOTE: Assurez-vous que graphics.js est chargé avant ce fichier
 const config = {
     type: Phaser.AUTO,
     width: 800,
