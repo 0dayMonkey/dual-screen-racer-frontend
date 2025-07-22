@@ -5,6 +5,7 @@ function main() {
     };
     let socket = null;
     let sessionCode = '';
+    let turningDirection = 'none';
 
     const statusDiv = document.getElementById('status');
     const connectionWrapper = document.getElementById('connection-wrapper');
@@ -57,9 +58,17 @@ function main() {
         });
     }
 
-    function emitPlayerInput(action) {
-        if (socket && socket.connected) {
-            socket.emit('player_input', { sessionCode, action });
+    function startTurn(direction) {
+        if (socket && socket.connected && turningDirection !== direction) {
+            turningDirection = direction;
+            socket.emit('start_turn', { sessionCode, direction });
+        }
+    }
+
+    function stopTurn() {
+        if (socket && socket.connected && turningDirection !== 'none') {
+            turningDirection = 'none';
+            socket.emit('stop_turn', { sessionCode });
         }
     }
     
@@ -82,14 +91,21 @@ function main() {
         window.location.reload();
     }
 
+    function addEventListeners(element, startCallback, endCallback) {
+        if (element) {
+            element.addEventListener('mousedown', startCallback);
+            element.addEventListener('mouseup', endCallback);
+            element.addEventListener('mouseleave', endCallback);
+            element.addEventListener('touchstart', (e) => { e.preventDefault(); startCallback(); });
+            element.addEventListener('touchend', (e) => { e.preventDefault(); endCallback(); });
+        }
+    }
+
+    addEventListeners(leftButton, () => startTurn('left'), stopTurn);
+    addEventListeners(rightButton, () => startTurn('right'), stopTurn);
+
     if (connectButton) {
         connectButton.addEventListener('click', connect);
-    }
-    if (leftButton) {
-        leftButton.addEventListener('click', () => emitPlayerInput('left'));
-    }
-    if (rightButton) {
-        rightButton.addEventListener('click', () => emitPlayerInput('right'));
     }
     if (restartButton) {
         restartButton.addEventListener('click', restartPage);
