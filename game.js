@@ -25,7 +25,7 @@ class LobbyScene extends Phaser.Scene {
     }
 
     initializeSocketConnection() {
-        this.socket = io('http://miaou.vps.webdock.cloud:8888');
+        this.socket = io('https://miaou.vps.webdock.cloud:8888');
     }
     
     setupSocketEvents() {
