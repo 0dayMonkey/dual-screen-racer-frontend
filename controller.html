@@ -1,0 +1,35 @@
+<!DOCTYPE html>
+<html lang="fr">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, user-scalable=no">
+    <title>Manette</title>
+    <style>
+        body { font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Helvetica, Arial, sans-serif; display: flex; flex-direction: column; justify-content: center; align-items: center; height: 100vh; margin: 0; background-color: #222; color: white; touch-action: manipulation; }
+        .hidden { display: none !important; }
+        #connection-wrapper { text-align: center; }
+        #connection-wrapper input { font-size: 24px; text-align: center; width: 200px; padding: 10px; margin-bottom: 15px; text-transform: uppercase; }
+        #connection-wrapper button { font-size: 20px; padding: 12px 24px; }
+        #controls-wrapper { display: flex; justify-content: space-around; width: 100%; }
+        .control-button { width: 120px; height: 120px; font-size: 50px; border: 2px solid white; background-color: #444; color: white; user-select: none; -webkit-user-select: none; }
+        #status { position: absolute; top: 20px; font-size: 16px; color: #aaa; }
+    </style>
+</head>
+<body>
+
+    <div id="status">En attente...</div>
+
+    <div id="connection-wrapper">
+        <input type="text" id="session-code-input" placeholder="CODE" maxlength="6">
+        <button id="connect-button">Connexion</button>
+    </div>
+
+    <div id="controls-wrapper" class="hidden">
+        <button id="left-button" class="control-button">◄</button>
+        <button id="right-button" class="control-button">►</button>
+    </div>
+
+    <script src="https://cdn.socket.io/4.7.5/socket.io.min.js"></script>
+    <script src="controller.js"></script>
+</body>
+</html>

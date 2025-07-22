@@ -25,7 +25,7 @@ class LobbyScene extends Phaser.Scene {
     }
 
     initializeSocketConnection() {
-        this.socket = io('http://localhost:8888');
+        this.socket = io('https://harib-naim.fr/racer:8888');
     }
     
     setupSocketEvents() {
