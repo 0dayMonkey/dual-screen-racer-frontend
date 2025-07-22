@@ -121,6 +121,13 @@ class GameScene extends Phaser.Scene {
         this.scrollSpeed += 0.005;
         this.physics.world.setBounds(0, 0, 800, 600);
         
+        // --- NOUVELLE PHYSIQUE ---
+        // Applique une friction pour que la voiture se redresse.
+        if (this.player.body.velocity.x !== 0) {
+            this.player.setVelocityX(this.player.body.velocity.x * 0.95);
+        }
+        // --- FIN DE LA NOUVELLE PHYSIQUE ---
+        
         this.laneLines.children.iterate(line => {
             if (line && line.y > 650) {
                 line.destroy();
@@ -146,11 +153,11 @@ class GameScene extends Phaser.Scene {
     }
 
     handlePlayerInput(action) {
-        const moveSpeed = 350;
+        const moveForce = 400; // Augmenté pour donner une impulsion plus forte
         if (action === 'left') {
-            this.player.setVelocityX(-moveSpeed);
+            this.player.setVelocityX(-moveForce);
         } else if (action === 'right') {
-            this.player.setVelocityX(moveSpeed);
+            this.player.setVelocityX(moveForce);
         }
     }
     
@@ -180,7 +187,7 @@ class GameScene extends Phaser.Scene {
         this.isGameRunning = true;
         this.timer = 0;
         this.time.addEvent({
-            delay: 1500,
+            delay: 1500, // Le temps entre chaque obstacle
             callback: this.spawnObstacle,
             callbackScope: this,
             loop: true
