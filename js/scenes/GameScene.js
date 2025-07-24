@@ -6,7 +6,7 @@ class GameScene extends Phaser.Scene {
         this.highestScore = 0; 
         this.finalScores = [];
         // MODIFICATION : Vitesse de défilement de la caméra (en pixels par seconde)
-        this.cameraSpeed = 480; 
+        this.cameraSpeed = 450; 
     }
 
     init(data) {
