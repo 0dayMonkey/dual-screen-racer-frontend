@@ -6,7 +6,7 @@ class GameScene extends Phaser.Scene {
         this.highestScore = 0; 
         this.finalScores = [];
         // MODIFICATION : Vitesse de défilement de la caméra (en pixels par seconde)
-        this.cameraSpeed = 450; 
+        this.cameraSpeed = 445; 
     }
 
     init(data) {
@@ -99,12 +99,31 @@ class GameScene extends Phaser.Scene {
     checkPlayerElimination() {
         const cameraBounds = this.cameras.main.worldView;
         const playersToEliminate = [];
+        const eliminationDelay = 2000; // Délai de 2 secondes en millisecondes
+
         this.players.forEach(player => {
+            // Si le joueur est hors de l'écran (en bas)
             if (player.y > cameraBounds.bottom + 50) {
-                playersToEliminate.push(player.playerId);
+                // Si c'est la première fois, on démarre le minuteur
+                if (player.offScreenSince === null) {
+                    player.offScreenSince = this.time.now;
+                }
+
+                // On donne un retour visuel : la voiture devient semi-transparente
+                player.setAlpha(0.5);
+
+                // On vérifie si le délai de 2 secondes est écoulé
+                if (this.time.now - player.offScreenSince > eliminationDelay) {
+                    playersToEliminate.push(player.playerId);
+                }
+            } else {
+                // Si le joueur est revenu à l'écran, on réinitialise son minuteur et sa visibilité
+                player.offScreenSince = null;
+                player.setAlpha(1);
             }
         });
 
+        // Cette partie reste inchangée : on supprime les joueurs marqués pour élimination
         playersToEliminate.forEach(playerId => {
             if (this.players.has(playerId)) {
                 const player = this.players.get(playerId);
@@ -116,7 +135,9 @@ class GameScene extends Phaser.Scene {
             }
         });
         
-        if (this.isGameRunning && this.players.size === 0) this.endGame();
+        if (this.isGameRunning && this.players.size === 0) {
+            this.endGame();
+        }
     }
 
     endGame() {

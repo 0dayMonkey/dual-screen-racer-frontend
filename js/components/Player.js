@@ -13,6 +13,8 @@ class Player extends Phaser.Physics.Arcade.Sprite {
         this.playerId = playerData.id;
         this.turning = 'none';
         this.score = 0;
+        this.offScreenSince = null;
+
     }
 
     updateMovement() {
