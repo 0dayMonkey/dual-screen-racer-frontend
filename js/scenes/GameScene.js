@@ -50,7 +50,6 @@ class GameScene extends Phaser.Scene {
     update(time, delta) {
         if (!this.isGameRunning) return;
 
-        // --- NOUVELLE LOGIQUE DE CAMÉRA ---
         // 1. La caméra avance verticalement à une vitesse constante
         this.cameras.main.scrollY -= (this.cameraSpeed * delta) / 1000;
 
@@ -59,7 +58,7 @@ class GameScene extends Phaser.Scene {
 
         // On met à jour les joueurs et on trouve le leader
         this.players.forEach(player => {
-            player.updateMovement(delta); // On passe delta pour des mouvements fluides
+            player.updateMovement(delta);
             if (player.y < leadPlayerY) {
                 leadPlayerY = player.y;
                 leadPlayer = player;
@@ -69,14 +68,13 @@ class GameScene extends Phaser.Scene {
         // 2. La caméra suit le leader horizontalement de manière douce
         if (leadPlayer) {
             const targetX = leadPlayer.x - this.cameras.main.width / 2;
-            // Interpolation pour un mouvement horizontal fluide
             this.cameras.main.scrollX = Phaser.Math.Interpolation.Linear([this.cameras.main.scrollX, targetX], 0.05);
         }
         
-        // --- FIN DE LA LOGIQUE DE CAMÉRA ---
-        
-        // La route suit la caméra
-        this.road.y = this.cameras.main.worldView.centerY + this.cameras.main.scrollY;
+        // MODIFICATION : Correction de la position de la route
+        // La route reste toujours centrée sur la caméra.
+        this.road.y = this.cameras.main.worldView.centerY;
+        // Le défilement de la texture est géré séparément pour donner l'illusion de mouvement.
         this.road.tilePositionY = this.cameras.main.scrollY;
         
         if (!leadPlayer) {
