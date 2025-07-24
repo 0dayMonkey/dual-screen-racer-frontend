@@ -112,19 +112,13 @@ class LobbyScene extends Phaser.Scene {
             readyIndicator
         });
         
-        // --- MODIFICATION DE L'ANIMATION D'ARRIVÉE ---
-
-        // 1. Mettre la voiture à l'horizontale (face à la droite).
         car.setAngle(90);
-
-        // 2. Faire partir la voiture de l'extérieur de l'écran (côté gauche).
         car.x = -100;
 
-        // 3. Animer son arrivée avec une décélération douce pour un effet plus fluide.
         this.tweens.add({
             targets: car,
-            x: this.scale.width / 2 - 50, // Se gare un peu avant le centre
-            ease: 'Cubic.easeOut', // Effet de freinage doux
+            x: this.scale.width / 2 - 50,
+            ease: 'Cubic.easeOut',
             duration: 1200
         });
     }
@@ -175,11 +169,12 @@ class GameScene extends Phaser.Scene {
         this.players.clear();
         this.playerInfo.forEach((playerData, index) => {
             const startX = (this.scale.width / (this.playerInfo.length + 1)) * (index + 1);
-            // La voiture est créée avec son orientation par défaut (verticale) pour la course.
             const playerSprite = this.physics.add.sprite(startX, this.scale.height - 150, 'car_texture')
                 .setTint(Phaser.Display.Color.ValueToColor(playerData.color).color);
 
-            playerSprite.setDamping(true).setDrag(0.98).setMaxVelocity(600).setCollideWorldBounds(true);
+            // MODIFICATION: Simplification de la physique pour une meilleure réactivité
+            // La vélocité sera contrôlée directement dans updatePlayerMovement
+            playerSprite.setDamping(false).setDrag(0).setMaxVelocity(800).setCollideWorldBounds(true);
 
             this.players.set(playerData.id, {
                 sprite: playerSprite,
@@ -188,6 +183,7 @@ class GameScene extends Phaser.Scene {
             });
         });
 
+        // La caméra suit toujours le joueur le plus en avant, qui sera déterminé dans la boucle update
         const firstPlayerSprite = this.players.values().next().value.sprite;
         if (firstPlayerSprite) {
             this.cameras.main.startFollow(firstPlayerSprite, true, 0.09, 0.09);
@@ -208,26 +204,43 @@ class GameScene extends Phaser.Scene {
     }
 
     playerHitObstacle(playerSprite, obstacle) {
+        // MODIFICATION: On ajoute un effet visuel à la collision avant de terminer
+        obstacle.destroy(); // Détruit l'obstacle touché
+        const particles = this.add.particles(0, 0, 'particle_texture', {
+            speed: 200,
+            angle: { min: 0, max: 360 },
+            scale: { start: 1, end: 0 },
+            lifespan: 800,
+            gravityY: 300,
+            blendMode: 'ADD'
+        });
+        particles.emitParticleAt(playerSprite.x, playerSprite.y, 16);
+        
+        playerSprite.setTint(0xff0000); // La voiture devient rouge
         this.gameOver();
     }
 
     update(time, delta) {
         if (!this.isGameRunning) return;
 
-        let leadPlayerY = 0;
-        let leadPlayerSprite = null;
+        let leadPlayerY = Number.MAX_VALUE;
+        let leadPlayer = null; // MODIFICATION: On stocke l'objet joueur complet, pas seulement le sprite
+
         this.players.forEach(player => {
-            this.updatePlayerMovement(player);
+            this.updatePlayerMovement(player, delta);
             if (player.sprite.y < leadPlayerY) {
                 leadPlayerY = player.sprite.y;
-                leadPlayerSprite = player.sprite;
+                leadPlayer = player;
             }
         });
 
-        if (!leadPlayerSprite) return;
+        if (!leadPlayer) return;
 
-        this.road.tilePositionY = leadPlayerSprite.y;
-        this.road.y = leadPlayerSprite.y;
+        // MODIFICATION (BUG FIX): La caméra suit le véritable joueur en tête
+        this.cameras.main.startFollow(leadPlayer.sprite, true, 0.09, 0.09);
+
+        this.road.tilePositionY = leadPlayer.sprite.y;
+        this.road.y = leadPlayer.sprite.y;
 
         let leadScore = 0;
         this.players.forEach(player => {
@@ -236,39 +249,46 @@ class GameScene extends Phaser.Scene {
         });
 
         this.scoreText.setText('Score: ' + leadScore);
-
-        this.spawnObstaclesIfNeeded();
-        this.cleanupObstacles();
+        
+        // MODIFICATION (BUG FIX): On passe le joueur en tête aux fonctions de gestion des obstacles
+        this.spawnObstaclesIfNeeded(leadPlayer);
+        this.cleanupObstacles(leadPlayer);
     }
 
-    updatePlayerMovement(player) {
-        const forwardSpeed = 500;
-        const turnStrength = 3;
-        const maxAngle = 40;
-        const straighteningFactor = 0.05;
+    // MODIFICATION (GESTION LATENCE): Nouvelle logique de mouvement plus directe et réactive
+    updatePlayerMovement(player, delta) {
+        const forwardSpeed = 600; // Vitesse de défilement vers le haut
+        const turnSpeed = 350;    // Vitesse de déplacement latéral
 
-        if (player.turning === 'left') {
-            player.sprite.angle -= turnStrength;
-        } else if (player.turning === 'right') {
-            player.sprite.angle += turnStrength;
+        // La voiture avance toujours tout droit à vitesse constante
+        player.sprite.body.velocity.y = -forwardSpeed;
+
+        // On applique une vélocité latérale pour un changement de direction instantané
+        switch (player.turning) {
+            case 'left':
+                player.sprite.body.velocity.x = -turnSpeed;
+                player.sprite.setAngle(-15); // On incline le sprite pour l'effet visuel
+                break;
+            case 'right':
+                player.sprite.body.velocity.x = turnSpeed;
+                player.sprite.setAngle(15);
+                break;
+            case 'none':
+                // On amortit le mouvement latéral pour un arrêt plus doux
+                player.sprite.body.velocity.x *= 0.85; 
+                // On redresse le sprite progressivement
+                player.sprite.setAngle(player.sprite.angle * 0.85);
+                break;
         }
-
-        player.sprite.angle = Phaser.Math.Clamp(player.sprite.angle, -maxAngle, maxAngle);
-
-        if (player.turning === 'none' && player.sprite.angle !== 0) {
-            player.sprite.angle *= (1 - straighteningFactor);
-        }
-
-        this.physics.velocityFromAngle(player.sprite.angle - 90, forwardSpeed, player.sprite.body.velocity);
     }
 
-    cleanupObstacles() {
+    // MODIFICATION (BUG FIX): La fonction accepte le joueur en tête comme argument
+    cleanupObstacles(leadPlayer) {
         const camera = this.cameras.main;
-        if (!this.playerInfo || this.playerInfo.length === 0) return;
-        const leadPlayer = this.players.get(this.playerInfo[0].id);
         if (!leadPlayer) return;
 
         this.obstacles.getChildren().forEach(obstacle => {
+            // Supprime les obstacles qui sont bien en dessous de la vue de la caméra
             if (obstacle.y > leadPlayer.sprite.y + camera.height) {
                 obstacle.destroy();
             }
@@ -321,16 +341,22 @@ class GameScene extends Phaser.Scene {
     startGame() {
         this.isGameRunning = true;
     }
-
-    spawnObstaclesIfNeeded() {
-        if (!this.playerInfo || this.playerInfo.length === 0) return;
-        const leadPlayer = this.players.get(this.playerInfo[0].id);
+    
+    // MODIFICATION (BUG FIX): La fonction accepte le joueur en tête comme argument
+    spawnObstaclesIfNeeded(leadPlayer) {
         if (!leadPlayer) return;
 
+        // On s'assure qu'il y a toujours des obstacles loin devant le joueur
         while (this.obstacles.getLength() < 20) {
-            const spawnY = leadPlayer.sprite.y - 800 - (Math.random() * this.scale.height);
-            const spawnX = Phaser.Math.Between(this.scale.width * 0.2, this.scale.width * 0.8);
-            this.obstacles.create(spawnX, spawnY, 'obstacle_texture');
+            const roadLeftBoundary = this.scale.width * 0.2;
+            const roadRightBoundary = this.scale.width * 0.8;
+            
+            // On génère un obstacle à une distance variable devant le joueur en tête
+            const spawnY = leadPlayer.sprite.y - 800 - (Math.random() * this.scale.height * 1.5);
+            const spawnX = Phaser.Math.Between(roadLeftBoundary, roadRightBoundary);
+            
+            const newObstacle = this.obstacles.create(spawnX, spawnY, 'obstacle_texture');
+            newObstacle.body.setImmovable(true); // Les obstacles ne bougent pas lors d'une collision
         }
     }
 
@@ -339,17 +365,18 @@ class GameScene extends Phaser.Scene {
         this.isGameRunning = false;
         this.physics.pause();
         this.cameras.main.stopFollow();
+        this.cameras.main.shake(300, 0.008); // Effet de secousse
 
         let finalScore = 0;
         this.players.forEach(p => {
             if (p.score > finalScore) finalScore = p.score;
         });
 
-        this.add.text(this.scale.width / 2, this.scale.height / 2, 'GAME OVER', {
+        this.add.text(this.cameras.main.worldView.x + this.scale.width / 2, this.cameras.main.worldView.y + this.scale.height / 2, 'GAME OVER', {
             fontSize: '64px',
             fill: '#ff0000',
             fontStyle: 'bold'
-        }).setOrigin(0.5).setScrollFactor(0);
+        }).setOrigin(0.5);
 
         if (this.socket) {
             this.socket.emit('game_over', {
