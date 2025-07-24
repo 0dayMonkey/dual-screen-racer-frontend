@@ -56,6 +56,11 @@ function main() {
             }
             showView('gameover');
         });
+
+        // NOUVEAU : Écoute l'ordre de redémarrage pour réinitialiser l'interface
+        socket.on('start_new_game', () => {
+            showView('controls');
+        });
     }
 
     function startTurn(direction) {
@@ -80,19 +85,25 @@ function main() {
         }
         
         setStatus('Tentative de connexion...');
-        if (socket && socket.connected) {
-            socket.emit('join_session', { sessionCode });
-        } else {
+        if (!socket || !socket.connected) {
             socket = io(serverUrl, socketOptions);
             setupSocketEvents();
             socket.on('connect', () => {
                  setStatus('Connecté au serveur');
                  socket.emit('join_session', { sessionCode });
             });
+        } else {
+            socket.emit('join_session', { sessionCode });
+        }
+    }
+    
+    // MODIFIÉ : Le bouton rejouer envoie un événement au serveur
+    function requestReplay() {
+        if(socket && socket.connected) {
+            socket.emit('request_replay', { sessionCode });
         }
     }
 
-    // Nouvelle fonction pour l'auto-remplissage
     function autoFillCode(code) {
         let i = 0;
         sessionCodeInput.value = '';
@@ -102,13 +113,11 @@ function main() {
                 i++;
             } else {
                 clearInterval(interval);
-                // Tenter la connexion automatiquement après remplissage
                 connect();
             }
-        }, 100); // Délai de 0.1s entre chaque chiffre
+        }, 100);
     }
 
-    // Détection de session au chargement
     function checkForActiveSessions() {
         const tempSocket = io(serverUrl, socketOptions);
         tempSocket.on('connect', () => {
@@ -121,14 +130,9 @@ function main() {
             }
             tempSocket.disconnect();
         });
-        // Si aucune session n'est trouvée après un court délai, on ne fait rien
         setTimeout(() => {
             if (tempSocket.connected) tempSocket.disconnect();
         }, 2000);
-    }
-    
-    function restartPage() {
-        window.location.reload();
     }
 
     function addEventListeners(element, startCallback, endCallback) {
@@ -144,10 +148,12 @@ function main() {
     addEventListeners(leftButton, () => startTurn('left'), stopTurn);
     addEventListeners(rightButton, () => startTurn('right'), stopTurn);
     if (connectButton) connectButton.addEventListener('click', connect);
-    if (restartButton) restartButton.addEventListener('click', restartPage);
+    
+    // Le bouton "Rejouer" appelle maintenant la nouvelle fonction
+    if (restartButton) restartButton.addEventListener('click', requestReplay);
     
     showView('connect');
-    checkForActiveSessions(); // Lancement de la détection
+    checkForActiveSessions();
 }
 
 main();

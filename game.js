@@ -153,6 +153,12 @@ class GameScene extends Phaser.Scene {
     setupSocketListeners() {
         this.socket.on('start_turn', (data) => { if (this.isGameRunning) this.turning = data.direction; });
         this.socket.on('stop_turn', () => { this.turning = 'none'; });
+
+        // NOUVEAU : Redémarre la scène actuelle quand l'ordre est donné
+        this.socket.on('start_new_game', () => {
+            // scene.restart() relance les fonctions init() et create() de la scène
+            this.scene.restart();
+        });
     }
 
     startCountdown() {
@@ -196,11 +202,7 @@ class GameScene extends Phaser.Scene {
         const finalScore = Math.floor(this.score);
 
         this.add.particles(this.player.x, this.player.y, 'particle_texture', {
-            speed: 200,
-            scale: { start: 1, end: 0 },
-            blendMode: 'ADD',
-            lifespan: 600,
-            quantity: 40
+            speed: 200, scale: { start: 1, end: 0 }, blendMode: 'ADD', lifespan: 600, quantity: 40
         });
         
         this.player.destroy();
@@ -208,8 +210,17 @@ class GameScene extends Phaser.Scene {
         this.socket.emit('game_over', { score: finalScore, sessionCode: this.sessionCode });
 
         this.add.text(this.scale.width / 2, this.scale.height / 2, 'GAME OVER', { fontSize: '64px', fill: '#ff0000', fontStyle: 'bold' }).setOrigin(0.5);
+
+        // NOUVEAU : Déclenche le redémarrage automatique après 5 secondes
+        this.time.delayedCall(5000, () => {
+            // S'assure que la scène n'a pas déjà été redémarrée manuellement
+            if (this.scene.isActive()) {
+                this.socket.emit('request_replay', { sessionCode: this.sessionCode });
+            }
+        }, [], this);
     }
 }
+
 
 const config = {
     type: Phaser.AUTO,
