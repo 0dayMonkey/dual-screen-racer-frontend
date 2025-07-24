@@ -75,14 +75,15 @@ class GameScene extends Phaser.Scene {
 
         this.road = this.add.tileSprite(this.scale.width / 2, this.scale.height / 2, this.scale.width, this.scale.height, 'road_texture');
 
+        // On définit un monde de jeu verticalement infini
+        const worldHeight = 1000000;
+        this.physics.world.setBounds(0, -worldHeight / 2, this.scale.width, worldHeight);
+
         this.player = this.physics.add.sprite(this.scale.width / 2, this.scale.height / 2, 'car_texture');
         this.player.setDamping(true);
         this.player.setDrag(0.98);
         this.player.setMaxVelocity(600);
         this.player.setCollideWorldBounds(true);
-        this.player.body.checkCollision.up = false;
-        this.player.body.checkCollision.down = false;
-
 
         this.cameras.main.startFollow(this.player, true, 0.09, 0.09);
         this.cameras.main.setZoom(1.2);
@@ -106,8 +107,9 @@ class GameScene extends Phaser.Scene {
 
         this.updatePlayerMovement();
         
+        // Fait défiler la texture pour simuler le mouvement
         this.road.tilePositionY = this.player.y;
-        
+        // Déplace la route pour qu'elle suive le joueur
         this.road.y = this.player.y;
 
         this.score = Math.max(0, Math.floor(-this.player.y / 10));
@@ -139,9 +141,6 @@ class GameScene extends Phaser.Scene {
         this.physics.velocityFromAngle(this.player.angle - 90, forwardSpeed, this.player.body.velocity);
     }
 
-    /**
-     * **CORRECTIF** : Ajout de la fonction qui supprime les obstacles hors de l'écran.
-     */
     cleanupObstacles() {
         this.obstacles.getChildren().forEach(obstacle => {
             if (obstacle.y > this.player.y + this.scale.height) {
