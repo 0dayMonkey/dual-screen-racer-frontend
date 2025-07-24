@@ -62,7 +62,7 @@ class GameScene extends Phaser.Scene {
         this.isGameRunning = false;
         this.turning = 'none';
         this.score = 0;
-        this.gameStartTime = 0; // **NOUVEAU** : Pour la période de grâce
+        this.gameStartTime = 0;
     }
 
     init(data) {
@@ -108,6 +108,9 @@ class GameScene extends Phaser.Scene {
         this.scoreText.setText('Score: ' + this.score);
         
         this.spawnObstaclesIfNeeded();
+        
+        // **CORRECTIF** : On appelle la fonction de nettoyage à chaque frame.
+        this.cleanupObstacles();
     }
 
     updatePlayerMovement() {
@@ -129,6 +132,18 @@ class GameScene extends Phaser.Scene {
         }
 
         this.physics.velocityFromAngle(this.player.angle - 90, forwardSpeed, this.player.body.velocity);
+    }
+
+    /**
+     * **CORRECTIF** : Ajout de la fonction qui supprime les obstacles hors de l'écran.
+     */
+    cleanupObstacles() {
+        this.obstacles.getChildren().forEach(obstacle => {
+            // Si un obstacle est bien derrière le joueur (plus bas que lui sur l'axe Y), on le supprime.
+            if (obstacle.y > this.player.y + this.scale.height) {
+                obstacle.destroy();
+            }
+        });
     }
 
     setupSocketListeners() {
@@ -160,13 +175,10 @@ class GameScene extends Phaser.Scene {
 
     startGame() {
         this.isGameRunning = true;
-        // **NOUVEAU** : On enregistre le moment où le jeu commence
         this.gameStartTime = this.time.now;
     }
 
     spawnObstaclesIfNeeded() {
-        // **CORRECTION** : On ajoute une condition pour ne pas faire apparaître d'obstacles
-        // pendant les 3 premières secondes de jeu (3000 millisecondes).
         if (this.time.now < this.gameStartTime + 3000) {
             return;
         }
