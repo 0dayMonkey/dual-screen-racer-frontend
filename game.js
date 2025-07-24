@@ -102,14 +102,18 @@ class GameScene extends Phaser.Scene {
         if (!this.isGameRunning) return;
 
         this.updatePlayerMovement();
+        
+        // Fait défiler la texture pour simuler le mouvement
         this.road.tilePositionY = this.player.y;
+        
+        // CORRECTION : Déplace la route pour qu'elle suive le joueur
+        this.road.y = this.player.y;
 
         this.score = Math.max(0, Math.floor(-this.player.y / 10));
         this.scoreText.setText('Score: ' + this.score);
         
         this.spawnObstaclesIfNeeded();
         
-        // **CORRECTIF** : On appelle la fonction de nettoyage à chaque frame.
         this.cleanupObstacles();
     }
 
