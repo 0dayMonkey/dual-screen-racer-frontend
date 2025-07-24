@@ -3,6 +3,8 @@ class GameScene extends Phaser.Scene {
         super({ key: 'GameScene' });
         this.players = new Map();
         this.isGameRunning = false;
+        // MODIFICATION : Variable pour garder en mémoire le meilleur score atteint.
+        this.highestScore = 0; 
     }
 
     init(data) {
@@ -12,6 +14,7 @@ class GameScene extends Phaser.Scene {
     }
 
     create() {
+        this.highestScore = 0; // Réinitialiser le score au début de chaque partie.
         this.road = this.add.tileSprite(this.scale.width / 2, this.scale.height / 2, this.scale.width, this.scale.height, 'road_texture');
         this.physics.world.setBounds(0, -1000000, this.scale.width, 1000000 + this.scale.height);
 
@@ -33,22 +36,14 @@ class GameScene extends Phaser.Scene {
         this.setupSocketListeners();
         this.startCountdown();
     }
-
-    // MODIFICATION : La collision n'est plus éliminatoire mais applique une pénalité physique.
+    
     playerHitObstacle(player, obstacle) {
-        // Appliquer un "choc" en inversant brièvement la vélocité verticale
         player.body.velocity.y = 250; 
-
-        // Ajouter un effet visuel pour le choc
-        player.setTint(0xff0000); // Le joueur devient rouge
-        this.cameras.main.shake(100, 0.005); // Secousse légère de la caméra
-        
-        // Retirer le tint après un court instant
+        player.setTint(0xff0000);
+        this.cameras.main.shake(100, 0.005);
         this.time.delayedCall(300, () => {
             player.clearTint();
         });
-        
-        // L'obstacle n'est PAS détruit, il reste une barrière.
     }
 
     update(time, delta) {
@@ -57,7 +52,6 @@ class GameScene extends Phaser.Scene {
         let leadPlayer = null;
         let leadPlayerY = Number.MAX_VALUE;
 
-        // Met à jour le mouvement de tous les joueurs et trouve celui en tête
         this.players.forEach(player => {
             player.updateMovement();
             if (player.y < leadPlayerY) {
@@ -67,65 +61,62 @@ class GameScene extends Phaser.Scene {
         });
 
         if (!leadPlayer) {
-            // S'il n'y a plus de joueur en tête (ex: dernier joueur éliminé), on termine la partie.
-            if (this.players.size > 0) {
+            // S'il n'y a plus de joueur actif, on s'assure que la partie se termine.
+            if (this.isGameRunning) {
                  this.endGame();
             }
             return;
         }
         
-        // Mise à jour de la caméra et de l'environnement
         this.cameras.main.startFollow(leadPlayer, true, 0.09, 0.09);
         this.road.tilePositionY = leadPlayer.y;
         this.road.y = leadPlayer.y;
 
-        // Mise à jour des obstacles et du score
         this.obstacleManager.update(leadPlayer);
         
-        let leadScore = 0;
+        let currentLeadScore = 0;
         this.players.forEach(player => {
             player.score = Math.max(0, Math.floor(-player.y / 10));
-            if (player.score > leadScore) leadScore = player.score;
+            if (player.score > currentLeadScore) {
+                currentLeadScore = player.score;
+            }
         });
-        this.scoreText.setText('Score: ' + leadScore);
+        
+        // MODIFICATION : Mettre à jour le meilleur score global en continu.
+        if (currentLeadScore > this.highestScore) {
+            this.highestScore = currentLeadScore;
+        }
+        this.scoreText.setText('Score: ' + currentLeadScore);
 
-        // MODIFICATION : Logique d'élimination par la caméra
         this.checkPlayerElimination();
     }
     
-    // MODIFICATION : Nouvelle fonction pour vérifier si des joueurs sont hors champ
     checkPlayerElimination() {
         const cameraBounds = this.cameras.main.worldView;
         const playersToEliminate = [];
 
         this.players.forEach(player => {
-            // Si la position Y du joueur est en dessous du bas de la caméra, il est éliminé
-            if (player.y > cameraBounds.bottom + 50) { // On ajoute une petite marge de 50px
+            if (player.y > cameraBounds.bottom + 50) {
                 playersToEliminate.push(player.playerId);
             }
         });
 
-        // On supprime les joueurs éliminés
         playersToEliminate.forEach(playerId => {
             if (this.players.has(playerId)) {
                 const player = this.players.get(playerId);
-                
-                // Effet visuel pour l'élimination
                 const particles = this.add.particles(0, 0, 'particle_texture', { speed: 150, scale: { start: 1.2, end: 0 }, lifespan: 1000, gravityY: 200 });
                 particles.emitParticleAt(player.x, player.y, 20);
-                
-                player.destroy(); // Supprime le sprite du joueur
-                this.players.delete(playerId); // Supprime le joueur de la liste des joueurs actifs
+                player.destroy();
+                this.players.delete(playerId);
             }
         });
         
-        // MODIFICATION : Condition de fin de partie. S'il reste 1 joueur ou moins, la partie se termine.
-        if (this.isGameRunning && this.players.size <= 1) {
+        // MODIFICATION : La partie se termine uniquement si TOUS les joueurs sont éliminés.
+        if (this.isGameRunning && this.players.size === 0) {
             this.endGame();
         }
     }
 
-    // MODIFICATION : L'ancienne fonction gameOver() est renommée et adaptée pour la fin de partie
     endGame() {
         if (!this.isGameRunning) return;
         this.isGameRunning = false;
@@ -133,25 +124,14 @@ class GameScene extends Phaser.Scene {
         this.physics.pause();
         this.cameras.main.stopFollow();
         
-        let winnerText = 'FIN DE LA PARTIE';
-        let finalScore = 0;
+        // MODIFICATION : Le message est toujours le même, car il n'y a plus de vainqueur.
+        const endText = 'PARTIE TERMINÉE';
 
-        // S'il reste un joueur, il est le gagnant
-        if (this.players.size === 1) {
-            const winner = this.players.values().next().value;
-            winnerText = 'VAINQUEUR !';
-            finalScore = winner.score;
-            this.cameras.main.startFollow(winner); // La caméra se centre sur le vainqueur
-        } else {
-             // Si tout le monde a été éliminé, on prend le meilleur score calculé
-             this.players.forEach(p => { if (p.score > finalScore) finalScore = p.score; });
-        }
-
-
-        this.add.text(this.cameras.main.worldView.x + this.scale.width / 2, this.cameras.main.worldView.y + this.scale.height / 2, winnerText, { fontSize: '64px', fill: '#00ff00' }).setOrigin(0.5);
+        this.add.text(this.cameras.main.worldView.x + this.scale.width / 2, this.cameras.main.worldView.y + this.scale.height / 2, endText, { fontSize: '64px', fill: '#ff0000' }).setOrigin(0.5);
         
         if (this.socket) {
-            this.socket.emit('game_over', { score: finalScore, sessionCode: this.sessionCode });
+            // MODIFICATION : On envoie le meilleur score atteint durant la partie.
+            this.socket.emit('game_over', { score: this.highestScore, sessionCode: this.sessionCode });
         }
     }
 
