@@ -67,19 +67,35 @@ class GameScene extends Phaser.Scene {
             maxX = Math.max(maxX, player.x);
         });
 
-        // Logique de caméra dynamique avec zoom et centrage sur le groupe
-        const playerSpread = maxX - minX;
-        const padding = this.scale.width * 0.4;
-        const targetZoom = Phaser.Math.Clamp(this.scale.width / (playerSpread + padding), 0.6, 1.2);
-        this.cameras.main.setZoom(Phaser.Math.Interpolation.Linear([this.cameras.main.zoom, targetZoom], 0.05));
+        // --- NOUVELLE LOGIQUE DE CAMÉRA CONDITIONNELLE ---
+        
+        // S'il y a plus d'un joueur, on utilise le zoom dynamique
+        if (this.players.size > 1) {
+            const playerSpread = maxX - minX;
+            const padding = this.scale.width * 0.4;
+            const targetZoom = Phaser.Math.Clamp(this.scale.width / (playerSpread + padding), 0.6, 1.2);
+            this.cameras.main.setZoom(Phaser.Math.Interpolation.Linear([this.cameras.main.zoom, targetZoom], 0.05));
 
-        const groupCenterX = (minX + maxX) / 2;
-        const targetX = groupCenterX - this.cameras.main.width / 2;
-        this.cameras.main.scrollX = Phaser.Math.Interpolation.Linear([this.cameras.main.scrollX, targetX], 0.05);
+            // On centre la caméra sur le milieu du groupe
+            const groupCenterX = (minX + maxX) / 2;
+            const targetX = groupCenterX - this.cameras.main.width / 2;
+            this.cameras.main.scrollX = Phaser.Math.Interpolation.Linear([this.cameras.main.scrollX, targetX], 0.05);
 
+        } else { // S'il ne reste qu'un seul joueur
+            // On revient à un zoom standard et stable
+            this.cameras.main.setZoom(Phaser.Math.Interpolation.Linear([this.cameras.main.zoom, 1.2], 0.05));
+
+            // On suit simplement ce dernier joueur horizontalement
+            const targetX = leadPlayer.x - this.cameras.main.width / 2;
+            this.cameras.main.scrollX = Phaser.Math.Interpolation.Linear([this.cameras.main.scrollX, targetX], 0.05);
+        }
+
+        // Le suivi vertical reste le même dans les deux cas
         const targetY = leadPlayer.y - this.scale.height * 0.8;
         const newScrollY = Math.min(this.cameras.main.scrollY, targetY);
         this.cameras.main.scrollY = Phaser.Math.Interpolation.Linear([this.cameras.main.scrollY, newScrollY], 0.05);
+
+        // --- FIN DE LA LOGIQUE DE CAMÉRA ---
 
         this.road.y = this.cameras.main.worldView.centerY;
         this.road.tilePositionY = this.cameras.main.scrollY;
