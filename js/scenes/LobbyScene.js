@@ -21,11 +21,22 @@ class LobbyScene extends Phaser.Scene {
             this.setupSocketEvents();
             this.socket.emit('create_session');
         } else {
+            this.setupSocketEvents(); // Assurez-vous que les écouteurs sont réactivés
             this.redrawLobbyState();
         }
     }
 
     setupSocketEvents() {
+        // Nettoyer les anciens écouteurs pour éviter les doublons
+        this.socket.off('session_created');
+        this.socket.off('player_joined');
+        this.socket.off('player_status_updated');
+        this.socket.off('player_name_updated');
+        this.socket.off('player_left');
+        this.socket.off('start_game_for_all');
+        this.socket.off('return_to_lobby');
+
+        // Configurer les nouveaux écouteurs
         this.socket.on('session_created', (data) => {
             this.sessionCode = data.sessionCode;
             this.redrawLobbyState();
@@ -37,8 +48,11 @@ class LobbyScene extends Phaser.Scene {
             if (this.playerObjects.has(playerId)) {
                 this.playerObjects.get(playerId).readyIndicator.setVisible(isReady);
             }
-            if (name) { 
-                playerObj.nameText.setText(name);
+        });
+
+        this.socket.on('player_name_updated', ({ playerId, newName }) => {
+            if (this.playerObjects.has(playerId)) {
+                this.playerObjects.get(playerId).nameText.setText(newName);
             }
         });
 
@@ -46,6 +60,7 @@ class LobbyScene extends Phaser.Scene {
             if (this.playerObjects.has(playerId)) {
                 this.playerObjects.get(playerId).car.destroy();
                 this.playerObjects.get(playerId).readyIndicator.destroy();
+                this.playerObjects.get(playerId).nameText.destroy();
                 this.playerObjects.delete(playerId);
                 this.repositionPlayers();
             }
@@ -74,20 +89,22 @@ class LobbyScene extends Phaser.Scene {
         const playerY = 150 + this.playerObjects.size * 100;
         const car = this.add.sprite(this.scale.width / 2, playerY, 'car_texture').setTint(Phaser.Display.Color.ValueToColor(player.color).color).setScale(1.2);
         const readyIndicator = this.add.text(car.x + 100, car.y, '✔', { fontSize: '48px', fill: '#2ECC40' }).setOrigin(0.5).setVisible(player.isReady);
-        this.playerObjects.set(player.id, { car, readyIndicator });
-        const nameText = this.add.text(car.x, car.y - 60, player.name, { fontSize: '24px', fill: '#FFF' }).setOrigin(0.5);
-        this.playerObjects.set(player.id, { car, readyIndicator, nameText }); // On stocke le texte du pseudo
+        const nameText = this.add.text(car.x, car.y - 60, player.name || 'Joueur', { fontSize: '24px', fill: '#FFF' }).setOrigin(0.5);
+        
+        this.playerObjects.set(player.id, { car, readyIndicator, nameText });
         
         car.setAngle(90);
         car.x = -100;
-        this.tweens.add({ targets: [car,nameText], x: this.scale.width / 2 - 50, ease: 'Cubic.easeOut', duration: 1200 });
+        nameText.x = -100; // Aligner le pseudo avec la voiture pour l'animation
+        
+        this.tweens.add({ targets: [car, nameText], x: this.scale.width / 2 - 50, ease: 'Cubic.easeOut', duration: 1200 });
     }
 
     repositionPlayers() {
         let i = 0;
         this.playerObjects.forEach(pObj => {
             const targetY = 150 + i * 100;
-            this.tweens.add({ targets: [pObj.car, pObj.readyIndicator], y: targetY, ease: 'power2', duration: 500 });
+            this.tweens.add({ targets: [pObj.car, pObj.readyIndicator, pObj.nameText], y: targetY, ease: 'power2', duration: 500 });
             i++;
         });
     }

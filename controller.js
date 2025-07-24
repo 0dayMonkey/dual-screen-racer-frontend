@@ -18,6 +18,20 @@ function main() {
     const finalScoreText = document.getElementById('final-score');
     const restartButton = document.getElementById('restart-button');
 
+
+
+    function updateName() {
+    if (socket && socket.connected) {
+        socket.emit('update_name', {
+            sessionCode,
+            name: nicknameInput.value || 'Joueur'
+        });
+    }
+}
+nicknameInput.addEventListener('input', updateName);
+
+
+
     function setStatus(message) {
         if (statusDiv) statusDiv.textContent = message;
     }
@@ -121,17 +135,12 @@ function main() {
     }
 
     function signalReady() {
-        if (socket && socket.connected) {
-            const name = nicknameInput.value || 'Joueur';
-
-            socket.emit('player_ready', {
-                sessionCode,
-                name: name,
-            });
-            readyButton.textContent = "En attente...";
-            readyButton.disabled = true;
-        }
+    if (socket && socket.connected) {
+        socket.emit('player_ready', { sessionCode });
+        readyButton.textContent = "En attente...";
+        readyButton.disabled = true;
     }
+}
 
     function requestReplay() {
         if (socket && socket.connected) socket.emit('request_replay', {
