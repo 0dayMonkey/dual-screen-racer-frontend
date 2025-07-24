@@ -17,9 +17,6 @@ class LobbyScene extends Phaser.Scene {
     }
 
     create() {
-        // **CORRECTION : La génération des textures est déplacée ici.**
-        // En créant les textures dans la première scène, elles sont disponibles
-        // pour toutes les scènes suivantes, y compris le lobby lui-même.
         GraphicsGenerator.createAllTextures(this);
 
         if (!this.socket) {
@@ -114,13 +111,21 @@ class LobbyScene extends Phaser.Scene {
             car,
             readyIndicator
         });
+        
+        // --- MODIFICATION DE L'ANIMATION D'ARRIVÉE ---
 
+        // 1. Mettre la voiture à l'horizontale (face à la droite).
+        car.setAngle(90);
+
+        // 2. Faire partir la voiture de l'extérieur de l'écran (côté gauche).
         car.x = -100;
+
+        // 3. Animer son arrivée avec une décélération douce pour un effet plus fluide.
         this.tweens.add({
             targets: car,
-            x: this.scale.width / 2,
-            ease: 'power2',
-            duration: 800,
+            x: this.scale.width / 2 - 50, // Se gare un peu avant le centre
+            ease: 'Cubic.easeOut', // Effet de freinage doux
+            duration: 1200
         });
     }
 
@@ -162,10 +167,6 @@ class GameScene extends Phaser.Scene {
     }
 
     create() {
-        // La génération des textures a été déplacée dans LobbyScene.
-        // Il n'est plus nécessaire de la rappeler ici.
-        // GraphicsGenerator.createAllTextures(this);
-
         this.road = this.add.tileSprite(this.scale.width / 2, this.scale.height / 2, this.scale.width, this.scale.height, 'road_texture');
 
         const worldHeight = 1000000;
@@ -174,6 +175,7 @@ class GameScene extends Phaser.Scene {
         this.players.clear();
         this.playerInfo.forEach((playerData, index) => {
             const startX = (this.scale.width / (this.playerInfo.length + 1)) * (index + 1);
+            // La voiture est créée avec son orientation par défaut (verticale) pour la course.
             const playerSprite = this.physics.add.sprite(startX, this.scale.height - 150, 'car_texture')
                 .setTint(Phaser.Display.Color.ValueToColor(playerData.color).color);
 
