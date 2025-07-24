@@ -62,6 +62,7 @@ class GameScene extends Phaser.Scene {
         this.isGameRunning = false;
         this.turning = 'none';
         this.score = 0;
+        this.gameStartTime = 0; // **NOUVEAU** : Pour la période de grâce
     }
 
     init(data) {
@@ -78,6 +79,7 @@ class GameScene extends Phaser.Scene {
         this.player.setDamping(true);
         this.player.setDrag(0.98);
         this.player.setMaxVelocity(600);
+        this.player.setCollideWorldBounds(true);
 
         this.cameras.main.startFollow(this.player, true, 0.09, 0.09);
         this.cameras.main.setZoom(1.2);
@@ -100,7 +102,6 @@ class GameScene extends Phaser.Scene {
         if (!this.isGameRunning) return;
 
         this.updatePlayerMovement();
-
         this.road.tilePositionY = this.player.y;
 
         this.score = Math.max(0, Math.floor(-this.player.y / 10));
@@ -159,9 +160,17 @@ class GameScene extends Phaser.Scene {
 
     startGame() {
         this.isGameRunning = true;
+        // **NOUVEAU** : On enregistre le moment où le jeu commence
+        this.gameStartTime = this.time.now;
     }
 
     spawnObstaclesIfNeeded() {
+        // **CORRECTION** : On ajoute une condition pour ne pas faire apparaître d'obstacles
+        // pendant les 3 premières secondes de jeu (3000 millisecondes).
+        if (this.time.now < this.gameStartTime + 3000) {
+            return;
+        }
+
         const spawnDistance = 1200;
         while (this.obstacles.getLength() < 15) { 
             const yPos = this.player.y - spawnDistance - (Math.random() * spawnDistance);
