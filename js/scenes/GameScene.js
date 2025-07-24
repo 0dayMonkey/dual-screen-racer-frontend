@@ -184,9 +184,23 @@ constructor() {
     }
 
     setupSocketListeners() {
-        this.socket.on('start_turn', ({ playerId, direction }) => { if (this.players.has(playerId)) this.players.get(playerId).turning = direction; });
-        this.socket.on('stop_turn', ({ playerId }) => { if (this.players.has(playerId)) this.players.get(playerId).turning = 'none'; });
-    }
+    this.socket.on('start_turn', ({ playerId, direction }) => { 
+        if (this.players.has(playerId)) this.players.get(playerId).turning = direction; 
+    });
+    this.socket.on('stop_turn', ({ playerId }) => { 
+        if (this.players.has(playerId)) this.players.get(playerId).turning = 'none'; 
+    });
+
+    // ---- AJOUTEZ CE BLOC ----
+    this.socket.on('player_left', ({ playerId }) => {
+        if (this.players.has(playerId)) {
+            const player = this.players.get(playerId);
+            player.destroy(); // Supprime l'objet du jeu
+            this.players.delete(playerId); // Supprime le joueur de la liste
+        }
+    });
+    // ---- FIN DE L'AJOUT ----
+}
 
     startCountdown() {
         const countdownText = this.add.text(this.scale.width / 2, this.scale.height / 2, '3', { fontSize: '128px', fill: '#FFF' }).setOrigin(0.5).setScrollFactor(0);
