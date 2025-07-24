@@ -4,16 +4,25 @@ class GameScene extends Phaser.Scene {
         this.players = new Map();
         this.isGameRunning = false;
         this.highestScore = 0; 
+        
+        // MODIFICATION : Propriétés pour la caméra et les scores
+        this.cameraTarget = null; 
+        this.finalScores = [];
     }
 
     init(data) {
         this.socket = data.socket;
         this.sessionCode = data.sessionCode;
-        this.playerInfo = data.players;
+        // On garde une copie des infos des joueurs pour l'écran des scores
+        this.playerInfo = data.players; 
     }
 
     create() {
+        // Réinitialisation des états pour une nouvelle partie
         this.highestScore = 0;
+        this.cameraTarget = null;
+        this.finalScores = [];
+
         this.road = this.add.tileSprite(this.scale.width / 2, this.scale.height / 2, this.scale.width, this.scale.height, 'road_texture');
         this.physics.world.setBounds(0, -1000000, this.scale.width, 1000000 + this.scale.height);
 
@@ -28,13 +37,7 @@ class GameScene extends Phaser.Scene {
             playerSprites.push(player);
         });
         
-        // MODIFICATION 1 : On configure la caméra au démarrage.
-        // Cela évite un "saut" de caméra au début du jeu.
-        const firstPlayerSprite = this.players.values().next().value;
-        if (firstPlayerSprite) {
-            this.cameras.main.startFollow(firstPlayerSprite, true, 0.1, 0.1); // Le `true` est important ici pour un démarrage direct.
-            this.cameras.main.setZoom(1.2);
-        }
+        this.cameras.main.setZoom(1.2);
 
         this.physics.add.collider(playerSprites, this.obstacleManager.getGroup(), this.playerHitObstacle, null, this);
         this.scoreText = this.add.text(16, 16, 'Score: 0', { fontSize: '24px', fill: '#FFF', fontStyle: 'bold' }).setScrollFactor(0);
@@ -67,15 +70,17 @@ class GameScene extends Phaser.Scene {
         });
 
         if (!leadPlayer) {
-            if (this.isGameRunning) {
-                 this.endGame();
-            }
+            // S'il n'y a plus de joueur, la partie est finie
+            if (this.isGameRunning) this.endGame();
             return;
         }
         
-        // MODIFICATION 2 : On ajuste les valeurs de "lerp" pour un suivi fluide.
-        // Le `false` indique que si la cible de la caméra change, la transition sera douce.
-        this.cameras.main.startFollow(leadPlayer, false, 0.1, 0.1);
+        // MODIFICATION : Logique de caméra améliorée
+        // On ne change la cible de la caméra que si le leader change
+        if (leadPlayer !== this.cameraTarget) {
+            this.cameraTarget = leadPlayer;
+            this.cameras.main.startFollow(this.cameraTarget, false, 0.1, 0.1);
+        }
         
         this.road.tilePositionY = leadPlayer.y;
         this.road.y = leadPlayer.y;
@@ -84,15 +89,12 @@ class GameScene extends Phaser.Scene {
         let currentLeadScore = 0;
         this.players.forEach(player => {
             player.score = Math.max(0, Math.floor(-player.y / 10));
-            if (player.score > currentLeadScore) {
-                currentLeadScore = player.score;
-            }
+            if (player.score > currentLeadScore) currentLeadScore = player.score;
         });
         
-        if (currentLeadScore > this.highestScore) {
-            this.highestScore = currentLeadScore;
-        }
+        if (currentLeadScore > this.highestScore) this.highestScore = currentLeadScore;
         this.scoreText.setText('Score: ' + currentLeadScore);
+        
         this.checkPlayerElimination();
     }
     
@@ -109,6 +111,13 @@ class GameScene extends Phaser.Scene {
         playersToEliminate.forEach(playerId => {
             if (this.players.has(playerId)) {
                 const player = this.players.get(playerId);
+                
+                // MODIFICATION : On enregistre le score avant de supprimer le joueur
+                this.finalScores.push({ 
+                    id: player.playerId, 
+                    score: player.score 
+                });
+
                 const particles = this.add.particles(0, 0, 'particle_texture', { speed: 150, scale: { start: 1.2, end: 0 }, lifespan: 1000, gravityY: 200 });
                 particles.emitParticleAt(player.x, player.y, 20);
                 player.destroy();
@@ -116,22 +125,59 @@ class GameScene extends Phaser.Scene {
             }
         });
         
+        // La partie se termine si tous les joueurs ont été éliminés
         if (this.isGameRunning && this.players.size === 0) {
             this.endGame();
         }
     }
 
+    // MODIFICATION : Fin de partie entièrement revue
     endGame() {
         if (!this.isGameRunning) return;
         this.isGameRunning = false;
-        this.physics.pause();
-        this.cameras.main.stopFollow();
-        const endText = 'PARTIE TERMINÉE';
-        this.add.text(this.cameras.main.worldView.x + this.scale.width / 2, this.cameras.main.worldView.y + this.scale.height / 2, endText, { fontSize: '64px', fill: '#ff0000' }).setOrigin(0.5);
         
+        this.physics.pause();
+        this.cameras.main.stopFollow(); // La caméra s'arrête
+
+        // On enregistre le score du ou des derniers joueurs restants s'il y en a
+        this.players.forEach(player => {
+            this.finalScores.push({ id: player.playerId, score: player.score });
+            player.destroy();
+        });
+        this.players.clear();
+
+        // Création de l'écran des scores
+        const rect = this.add.rectangle(this.cameras.main.worldView.centerX, this.cameras.main.worldView.centerY, 400, 300, 0x000000, 0.7).setScrollFactor(0);
+        const title = this.add.text(rect.x, rect.y - 120, 'Scores Finaux', { fontSize: '32px', fill: '#fff' }).setOrigin(0.5).setScrollFactor(0);
+
+        // Trier les scores du meilleur au moins bon
+        this.finalScores.sort((a, b) => b.score - a.score);
+
+        // Afficher chaque score
+        this.finalScores.forEach((scoreEntry, index) => {
+            const playerInfo = this.playerInfo.find(p => p.id === scoreEntry.id);
+            const color = playerInfo ? playerInfo.color : '#FFFFFF';
+            
+            const yPos = title.y + 60 + (index * 40);
+            this.add.text(rect.x, yPos, `Joueur ${index + 1}: ${scoreEntry.score}`, { fontSize: '24px' })
+                .setOrigin(0.5)
+                .setScrollFactor(0)
+                .setTint(Phaser.Display.Color.ValueToColor(color).color);
+        });
+
+        // Envoyer le meilleur score au serveur pour la manette
         if (this.socket) {
             this.socket.emit('game_over', { score: this.highestScore, sessionCode: this.sessionCode });
         }
+
+        // Retour au lobby après 10 secondes
+        this.time.delayedCall(10000, () => {
+            this.scene.start('LobbyScene', { 
+                socket: this.socket, 
+                sessionCode: this.sessionCode, 
+                players: this.playerInfo 
+            });
+        });
     }
 
     setupSocketListeners() {
