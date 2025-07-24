@@ -1,11 +1,9 @@
 class GameScene extends Phaser.Scene {
-constructor() {
+    constructor() {
         super({ key: 'GameScene' });
         this.players = new Map();
-        this.scoreDisplays = new Map(); // Ajouté : pour stocker les textes des scores
-
+        this.scoreDisplays = new Map();
         this.isGameRunning = false;
-        this.highestScore = 0; 
         this.finalScores = [];
         this.cameraSpeed = 455; 
     }
@@ -17,21 +15,31 @@ constructor() {
     }
 
     create() {
-        this.highestScore = 0;
         this.finalScores = [];
+        this.players.clear();
+        this.scoreDisplays.clear();
+
         this.road = this.add.tileSprite(this.scale.width / 2, this.scale.height / 2, this.scale.width, this.scale.height, 'road_texture');
         this.physics.world.setBounds(0, -1000000, this.scale.width, 1000000 + this.scale.height);
 
         this.obstacleManager = new ObstacleManager(this);
 
-        this.players.clear();
-        this.scoreDisplays.clear();
-
         this.playerInfo.forEach((playerData, index) => {
             const startX = (this.scale.width / (this.playerInfo.length + 1)) * (index + 1);
             const player = new Player(this, startX, this.scale.height - 150, playerData);
             this.players.set(playerData.id, player);
-            const scoreText = this.add.text(16, 16 + (index * 30), `${player.name}: 0`, { fontSize: '20px', fill: '#FFF', fontStyle: 'bold' }).setScrollFactor(0);
+
+            // --- LA CORRECTION EST ICI ---
+            // En ajoutant .setScrollFactor(0), on dit à Phaser :
+            // "Cet objet ne doit jamais bouger, même si la caméra se déplace."
+            const scoreText = this.add.text(16, 16 + (index * 30), `${player.name}: 0`, { 
+                fontSize: '20px', 
+                fill: '#FFF', 
+                fontStyle: 'bold',
+                stroke: '#000', // Ajout d'un contour noir pour la lisibilité
+                strokeThickness: 4
+            }).setScrollFactor(0); // C'est la ligne la plus importante !
+
             scoreText.setTint(Phaser.Display.Color.ValueToColor(playerData.color).color);
             this.scoreDisplays.set(playerData.id, scoreText);
         });
@@ -72,8 +80,6 @@ constructor() {
             maxX = Math.max(maxX, player.x);
         });
 
-        
-        // S'il y a plus d'un joueur, on utilise le zoom dynamique
         if (this.players.size > 1) {
             const playerSpread = maxX - minX;
             const padding = this.scale.width * 0.4;
@@ -84,41 +90,28 @@ constructor() {
             const targetX = groupCenterX - this.cameras.main.width / 2;
             this.cameras.main.scrollX = Phaser.Math.Interpolation.Linear([this.cameras.main.scrollX, targetX], 0.05);
 
-            // La caméra suit verticalement le leader
             const targetY = leadPlayer.y - this.scale.height * 0.8;
             const newScrollY = Math.min(this.cameras.main.scrollY, targetY);
             this.cameras.main.scrollY = Phaser.Math.Interpolation.Linear([this.cameras.main.scrollY, newScrollY], 0.05);
 
         } else { 
-            // MODIFICATION : S'il ne reste qu'un seul joueur, la caméra avance toute seule
-            
-            // 1. Avancée verticale constante
             this.cameras.main.scrollY -= (this.cameraSpeed * delta) / 1000;
-
-            // 2. La caméra se recentre horizontalement et arrête de suivre le joueur
             const targetX = (this.scale.width / 2) - this.cameras.main.width / 2;
             this.cameras.main.scrollX = Phaser.Math.Interpolation.Linear([this.cameras.main.scrollX, targetX], 0.05);
-
-            // 3. On revient à un zoom standard
             this.cameras.main.setZoom(Phaser.Math.Interpolation.Linear([this.cameras.main.zoom, 1.2], 0.05));
         }
-
-        // --- FIN DE LA LOGIQUE DE CAMÉRA ---
 
         this.road.y = this.cameras.main.worldView.centerY;
         this.road.tilePositionY = this.cameras.main.scrollY;
         
         this.obstacleManager.update(leadPlayer);
         
-        let currentLeadScore = 0;
         this.players.forEach(player => {
             player.score = Math.max(0, Math.floor(-(player.y - this.scale.height) / 10));
-            if (player.score > currentLeadScore) currentLeadScore = player.score;
-        if (this.scoreDisplays.has(player.playerId)) {
+            if (this.scoreDisplays.has(player.playerId)) {
                 this.scoreDisplays.get(player.playerId).setText(`${player.name}: ${player.score}`);
             }
         });
-        
         
         this.checkPlayerElimination();
     }
@@ -146,12 +139,12 @@ constructor() {
         playersToEliminate.forEach(playerId => {
             if (this.players.has(playerId)) {
                 const player = this.players.get(playerId);
-                this.finalScores.push({ id: player.playerId, score: player.score });
+                this.finalScores.push({ id: player.playerId, name: player.name, score: player.score });
                 const particles = this.add.particles(0, 0, 'particle_texture', { speed: 150, scale: { start: 1.2, end: 0 }, lifespan: 1000, gravityY: 200 });
                 particles.emitParticleAt(player.x, player.y, 20);
                 player.destroy();
                 this.players.delete(playerId);
-            if(this.scoreDisplays.has(playerId)) {
+                if(this.scoreDisplays.has(playerId)) {
                     this.scoreDisplays.get(playerId).destroy();
                     this.scoreDisplays.delete(playerId);
                 }
@@ -171,23 +164,25 @@ constructor() {
         this.cameras.main.stopFollow();
 
         this.players.forEach(player => {
-            this.finalScores.push({ id: player.playerId, score: player.score });
+            this.finalScores.push({ id: player.playerId, name: player.name, score: player.score });
             player.destroy();
         });
         this.players.clear();
 
         const rect = this.add.rectangle(this.cameras.main.worldView.centerX, this.cameras.main.worldView.centerY, 400, 300, 0x000000, 0.7).setScrollFactor(0);
         const title = this.add.text(rect.x, rect.y - 120, 'Scores Finaux', { fontSize: '32px', fill: '#fff' }).setOrigin(0.5).setScrollFactor(0);
+        
         this.finalScores.sort((a, b) => b.score - a.score);
 
         this.finalScores.forEach((scoreEntry, index) => {
             const playerInfo = this.playerInfo.find(p => p.id === scoreEntry.id);
             const color = playerInfo ? playerInfo.color : '#FFFFFF';
+            const name = scoreEntry.name || 'Joueur';
             const yPos = title.y + 60 + (index * 40);
-            this.add.text(rect.x, yPos, `Joueur ${index + 1}: ${scoreEntry.score}`, { fontSize: '24px' }).setOrigin(0.5).setScrollFactor(0).setTint(Phaser.Display.Color.ValueToColor(color).color);
+            this.add.text(rect.x, yPos, `${name}: ${scoreEntry.score}`, { fontSize: '24px' }).setOrigin(0.5).setScrollFactor(0).setTint(Phaser.Display.Color.ValueToColor(color).color);
         });
 
-        if (this.socket) this.socket.emit('game_over', { score: this.highestScore, sessionCode: this.sessionCode });
+        if (this.socket) this.socket.emit('game_over', { score: this.finalScores.length > 0 ? this.finalScores[0].score : 0, sessionCode: this.sessionCode });
         this.time.delayedCall(10000, () => this.scene.start('LobbyScene', { socket: this.socket, sessionCode: this.sessionCode, players: this.playerInfo }));
     }
 
@@ -203,10 +198,11 @@ constructor() {
                     this.scoreDisplays.delete(playerId);
                 }
             }
-        });}
+        });
+    }
 
     startCountdown() {
-        const countdownText = this.add.text(this.scale.width / 2, this.scale.height / 2, '3', { fontSize: '128px', fill: '#FFF' }).setOrigin(0.5).setScrollFactor(0);
+        const countdownText = this.add.text(this.scale.width / 2, this.scale.height / 2, '3', { fontSize: '128px', fill: '#FFF', stroke: '#000', strokeThickness: 8 }).setOrigin(0.5).setScrollFactor(0);
         let count = 3;
         this.time.addEvent({
             delay: 1000,
