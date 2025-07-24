@@ -11,6 +11,8 @@ class Player extends Phaser.Physics.Arcade.Sprite {
         this.setDamping(true).setDrag(0.98).setMaxVelocity(600).setCollideWorldBounds(true);
         
         this.playerId = playerData.id;
+        this.name = playerData.name; // Ligne ajoutée
+
         this.turning = 'none';
         this.score = 0;
         this.offScreenSince = null;

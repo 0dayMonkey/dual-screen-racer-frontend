@@ -37,6 +37,9 @@ class LobbyScene extends Phaser.Scene {
             if (this.playerObjects.has(playerId)) {
                 this.playerObjects.get(playerId).readyIndicator.setVisible(isReady);
             }
+            if (name) { 
+                playerObj.nameText.setText(name);
+            }
         });
 
         this.socket.on('player_left', ({ playerId }) => {
@@ -72,9 +75,12 @@ class LobbyScene extends Phaser.Scene {
         const car = this.add.sprite(this.scale.width / 2, playerY, 'car_texture').setTint(Phaser.Display.Color.ValueToColor(player.color).color).setScale(1.2);
         const readyIndicator = this.add.text(car.x + 100, car.y, '✔', { fontSize: '48px', fill: '#2ECC40' }).setOrigin(0.5).setVisible(player.isReady);
         this.playerObjects.set(player.id, { car, readyIndicator });
+        const nameText = this.add.text(car.x, car.y - 60, player.name, { fontSize: '24px', fill: '#FFF' }).setOrigin(0.5);
+        this.playerObjects.set(player.id, { car, readyIndicator, nameText }); // On stocke le texte du pseudo
+        
         car.setAngle(90);
         car.x = -100;
-        this.tweens.add({ targets: car, x: this.scale.width / 2 - 50, ease: 'Cubic.easeOut', duration: 1200 });
+        this.tweens.add({ targets: [car,nameText], x: this.scale.width / 2 - 50, ease: 'Cubic.easeOut', duration: 1200 });
     }
 
     repositionPlayers() {
