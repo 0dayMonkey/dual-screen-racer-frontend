@@ -82,24 +82,34 @@ createAllTextures: function(scene) {
     },
 
     _createRoadTexture: function(scene) {
-    const g = scene.make.graphics({ x: 0, y: 0, add: false });
-    const width = 400;
-    const height = 800;
-    const laneWidth = 80;
-    const lineWidth = 10;
-    const lineColor = 0xFFFF00;
-    const roadColor = 0x333333;
+        const g = scene.make.graphics({ x: 0, y: 0, add: false });
+        const gameWidth = scene.sys.game.config.width;
+        const gameHeight = scene.sys.game.config.height;
+        const roadWidth = 400; // Largeur de la partie roulable
+        const roadColor = 0x333333;
+        const grassColor = 0x225522;
+        const lineColor = 0xFFFF00;
+        const lineWidth = 10;
+        const dashLength = 50;
+        const dashGap = 30;
 
-    g.fillStyle(roadColor);
-    g.fillRect(0, 0, width, height);
+        // 1. Dessiner l'herbe sur les côtés
+        g.fillStyle(grassColor);
+        g.fillRect(0, 0, gameWidth, gameHeight);
 
-    g.fillStyle(lineColor);
-    g.fillRect(width / 2 - lineWidth / 2, 0, lineWidth, height);
-    g.fillRect(laneWidth - lineWidth / 2, 0, lineWidth, height);
-    g.fillRect(width - laneWidth - lineWidth / 2, 0, lineWidth, height);
+        // 2. Dessiner le goudron de la route au centre
+        const roadX = (gameWidth - roadWidth) / 2;
+        g.fillStyle(roadColor);
+        g.fillRect(roadX, 0, roadWidth, gameHeight);
+        
+        // 3. Dessiner les lignes centrales en pointillés
+        g.fillStyle(lineColor);
+        for (let y = 0; y < gameHeight; y += dashLength + dashGap) {
+            g.fillRect(gameWidth / 2 - lineWidth / 2, y, lineWidth, dashLength);
+        }
 
-    g.generateTexture('road_texture', width, height);
-    g.destroy();
-},
+        g.generateTexture('road_texture', gameWidth, gameHeight);
+        g.destroy();
+    },
 
 };
