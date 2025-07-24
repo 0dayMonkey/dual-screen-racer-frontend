@@ -1,0 +1,118 @@
+class GameScene extends Phaser.Scene {
+    constructor() {
+        super({ key: 'GameScene' });
+        this.players = new Map();
+        this.isGameRunning = false;
+    }
+
+    init(data) {
+        this.socket = data.socket;
+        this.sessionCode = data.sessionCode;
+        this.playerInfo = data.players;
+    }
+
+    create() {
+        this.road = this.add.tileSprite(this.scale.width / 2, this.scale.height / 2, this.scale.width, this.scale.height, 'road_texture');
+        this.physics.world.setBounds(0, -1000000, this.scale.width, 1000000 + this.scale.height);
+
+        // Instancier le gestionnaire d'obstacles
+        this.obstacleManager = new ObstacleManager(this);
+
+        this.players.clear();
+        const playerSprites = [];
+        this.playerInfo.forEach((playerData, index) => {
+            const startX = (this.scale.width / (this.playerInfo.length + 1)) * (index + 1);
+            const player = new Player(this, startX, this.scale.height - 150, playerData);
+            this.players.set(playerData.id, player);
+            playerSprites.push(player);
+        });
+
+        // Configurer la collision
+        this.physics.add.collider(playerSprites, this.obstacleManager.getGroup(), this.playerHitObstacle, null, this);
+
+        this.scoreText = this.add.text(16, 16, 'Score: 0', { fontSize: '24px', fill: '#FFF', fontStyle: 'bold' }).setScrollFactor(0);
+
+        this.setupSocketListeners();
+        this.startCountdown();
+    }
+
+    update(time, delta) {
+        if (!this.isGameRunning) return;
+
+        let leadPlayer = null;
+        let leadPlayerY = Number.MAX_VALUE;
+
+        this.players.forEach(player => {
+            player.updateMovement();
+            if (player.y < leadPlayerY) {
+                leadPlayerY = player.y;
+                leadPlayer = player;
+            }
+        });
+
+        if (!leadPlayer) return;
+        
+        this.cameras.main.startFollow(leadPlayer, true, 0.09, 0.09);
+        this.road.tilePositionY = leadPlayer.y;
+        this.road.y = leadPlayer.y;
+
+        // Mettre à jour les obstacles et le score
+        this.obstacleManager.update(leadPlayer);
+        
+        let leadScore = 0;
+        this.players.forEach(player => {
+            player.score = Math.max(0, Math.floor(-player.y / 10));
+            if (player.score > leadScore) leadScore = player.score;
+        });
+        this.scoreText.setText('Score: ' + leadScore);
+    }
+    
+    playerHitObstacle(player, obstacle) {
+        obstacle.destroy();
+        const particles = this.add.particles(0, 0, 'particle_texture', { speed: 200, scale: { start: 1, end: 0 }, lifespan: 800, gravityY: 300, blendMode: 'ADD' });
+        particles.emitParticleAt(player.x, player.y, 16);
+        player.setTint(0xff0000);
+        this.gameOver();
+    }
+
+    setupSocketListeners() {
+        this.socket.on('start_turn', ({ playerId, direction }) => {
+            if (this.isGameRunning && this.players.has(playerId)) this.players.get(playerId).turning = direction;
+        });
+        this.socket.on('stop_turn', ({ playerId }) => {
+            if (this.isGameRunning && this.players.has(playerId)) this.players.get(playerId).turning = 'none';
+        });
+    }
+
+    startCountdown() {
+        const countdownText = this.add.text(this.scale.width / 2, this.scale.height / 2, '3', { fontSize: '128px', fill: '#FFF' }).setOrigin(0.5).setScrollFactor(0);
+        let count = 3;
+        this.time.addEvent({
+            delay: 1000,
+            callback: () => {
+                count--;
+                if (count > 0) countdownText.setText(String(count));
+                else if (count === 0) countdownText.setText('GO!');
+                else {
+                    countdownText.destroy();
+                    this.isGameRunning = true;
+                }
+            },
+            repeat: 3
+        });
+    }
+
+    gameOver() {
+        if (!this.isGameRunning) return;
+        this.isGameRunning = false;
+        this.physics.pause();
+        this.cameras.main.stopFollow();
+        this.cameras.main.shake(300, 0.008);
+
+        let finalScore = 0;
+        this.players.forEach(p => { if (p.score > finalScore) finalScore = p.score; });
+
+        this.add.text(this.cameras.main.worldView.x + this.scale.width / 2, this.cameras.main.worldView.y + this.scale.height / 2, 'GAME OVER', { fontSize: '64px', fill: '#ff0000' }).setOrigin(0.5);
+        this.socket.emit('game_over', { score: finalScore, sessionCode: this.sessionCode });
+    }
+}
