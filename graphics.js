@@ -1,10 +1,11 @@
 const GraphicsGenerator = {
-    createAllTextures: function(scene) {
-        this._createCarTexture(scene);
-        this._createObstacleTexture(scene);
-        this._createLineTexture(scene);
-        this._createParticleTexture(scene);
-    },
+createAllTextures: function(scene) {
+    this._createCarTexture(scene);
+    this._createObstacleTexture(scene);
+    this._createLineTexture(scene);
+    this._createParticleTexture(scene);
+    this._createRoadTexture(scene); // Ajout de la texture de la route
+},
 
     _createCarTexture: function(scene) {
         const carWidth = 40;
@@ -78,5 +79,27 @@ const GraphicsGenerator = {
         g.fillCircle(6, 6, 6);
         g.generateTexture('particle_texture', 12, 12);
         g.destroy();
-    }
+    },
+
+    _createRoadTexture: function(scene) {
+    const g = scene.make.graphics({ x: 0, y: 0, add: false });
+    const width = 400;
+    const height = 800;
+    const laneWidth = 80;
+    const lineWidth = 10;
+    const lineColor = 0xFFFF00;
+    const roadColor = 0x333333;
+
+    g.fillStyle(roadColor);
+    g.fillRect(0, 0, width, height);
+
+    g.fillStyle(lineColor);
+    g.fillRect(width / 2 - lineWidth / 2, 0, lineWidth, height);
+    g.fillRect(laneWidth - lineWidth / 2, 0, lineWidth, height);
+    g.fillRect(width - laneWidth - lineWidth / 2, 0, lineWidth, height);
+
+    g.generateTexture('road_texture', width, height);
+    g.destroy();
+},
+
 };

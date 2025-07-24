@@ -36,28 +36,23 @@ class GameScene extends Phaser.Scene {
         this.socket = data.socket;
     }
 
-    create() {
-        GraphicsGenerator.createAllTextures(this);
-        
-        this.road = this.add.tileSprite(400, 300, 1600, 1200, 'road_texture');
-        
-        this.player = this.physics.add.sprite(400, 500, 'car_texture');
-        this.player.setDamping(true);
-        this.player.setDrag(0.98);
-        this.player.setAngularDrag(400);
-        this.player.setMaxVelocity(600);
+create() {
+    GraphicsGenerator.createAllTextures(this);
 
-        this.cameras.main.startFollow(this.player, true, 0.09, 0.09);
-        this.cameras.main.setZoom(1.2);
+    this.road = this.add.tileSprite(400, 300, 800, 600, 'road_texture'); // Taille ajustée
+    this.road.tileScaleY = 0.5; // Ajustement de l'échelle pour la hauteur
 
-        this.obstacles = this.physics.add.group({ immovable: true });
-        this.physics.add.collider(this.player, this.obstacles);
-        
-        this.scoreText = this.add.text(0, 0, 'Score: 0', { fontSize: '24px', fill: '#FFF', fontStyle: 'bold' }).setScrollFactor(0);
-        
-        this.setupSocketListeners();
-        this.startCountdown();
-    }
+    this.player = this.physics.add.sprite(400, 500, 'car_texture').setDamping(true).setDrag(0.98).setAngularDrag(400).setMaxVelocity(600);
+    this.cameras.main.startFollow(this.player, true, 0.09, 0.09).setZoom(1.2);
+
+    this.obstacles = this.physics.add.group({ immovable: true });
+    this.physics.add.collider(this.player, this.obstacles);
+
+    this.scoreText = this.add.text(0, 0, 'Score: 0', { fontSize: '24px', fill: '#FFF', fontStyle: 'bold' }).setScrollFactor(0);
+
+    this.setupSocketListeners();
+    this.startCountdown();
+},
     
     update(time) {
         if (!this.isGameRunning) return;
