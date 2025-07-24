@@ -3,7 +3,6 @@ class GameScene extends Phaser.Scene {
         super({ key: 'GameScene' });
         this.players = new Map();
         this.isGameRunning = false;
-        // MODIFICATION : Variable pour garder en mémoire le meilleur score atteint.
         this.highestScore = 0; 
     }
 
@@ -14,7 +13,7 @@ class GameScene extends Phaser.Scene {
     }
 
     create() {
-        this.highestScore = 0; // Réinitialiser le score au début de chaque partie.
+        this.highestScore = 0;
         this.road = this.add.tileSprite(this.scale.width / 2, this.scale.height / 2, this.scale.width, this.scale.height, 'road_texture');
         this.physics.world.setBounds(0, -1000000, this.scale.width, 1000000 + this.scale.height);
 
@@ -30,19 +29,18 @@ class GameScene extends Phaser.Scene {
         });
 
         this.physics.add.collider(playerSprites, this.obstacleManager.getGroup(), this.playerHitObstacle, null, this);
-
         this.scoreText = this.add.text(16, 16, 'Score: 0', { fontSize: '24px', fill: '#FFF', fontStyle: 'bold' }).setScrollFactor(0);
-
         this.setupSocketListeners();
         this.startCountdown();
     }
     
     playerHitObstacle(player, obstacle) {
         player.body.velocity.y = 250; 
-        player.setTint(0xff0000);
+        player.setTint(0xff0000); // La voiture devient rouge pour le choc
         this.cameras.main.shake(100, 0.005);
+        
         this.time.delayedCall(300, () => {
-            player.clearTint();
+            player.setTint(player.originalColor);
         });
     }
 
@@ -61,7 +59,6 @@ class GameScene extends Phaser.Scene {
         });
 
         if (!leadPlayer) {
-            // S'il n'y a plus de joueur actif, on s'assure que la partie se termine.
             if (this.isGameRunning) {
                  this.endGame();
             }
@@ -71,7 +68,6 @@ class GameScene extends Phaser.Scene {
         this.cameras.main.startFollow(leadPlayer, true, 0.09, 0.09);
         this.road.tilePositionY = leadPlayer.y;
         this.road.y = leadPlayer.y;
-
         this.obstacleManager.update(leadPlayer);
         
         let currentLeadScore = 0;
@@ -82,12 +78,10 @@ class GameScene extends Phaser.Scene {
             }
         });
         
-        // MODIFICATION : Mettre à jour le meilleur score global en continu.
         if (currentLeadScore > this.highestScore) {
             this.highestScore = currentLeadScore;
         }
         this.scoreText.setText('Score: ' + currentLeadScore);
-
         this.checkPlayerElimination();
     }
     
@@ -111,7 +105,6 @@ class GameScene extends Phaser.Scene {
             }
         });
         
-        // MODIFICATION : La partie se termine uniquement si TOUS les joueurs sont éliminés.
         if (this.isGameRunning && this.players.size === 0) {
             this.endGame();
         }
@@ -120,17 +113,12 @@ class GameScene extends Phaser.Scene {
     endGame() {
         if (!this.isGameRunning) return;
         this.isGameRunning = false;
-        
         this.physics.pause();
         this.cameras.main.stopFollow();
-        
-        // MODIFICATION : Le message est toujours le même, car il n'y a plus de vainqueur.
         const endText = 'PARTIE TERMINÉE';
-
         this.add.text(this.cameras.main.worldView.x + this.scale.width / 2, this.cameras.main.worldView.y + this.scale.height / 2, endText, { fontSize: '64px', fill: '#ff0000' }).setOrigin(0.5);
         
         if (this.socket) {
-            // MODIFICATION : On envoie le meilleur score atteint durant la partie.
             this.socket.emit('game_over', { score: this.highestScore, sessionCode: this.sessionCode });
         }
     }

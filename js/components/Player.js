@@ -5,8 +5,10 @@ class Player extends Phaser.Physics.Arcade.Sprite {
         scene.add.existing(this);
         scene.physics.add.existing(this);
 
-        this.setTint(Phaser.Display.Color.ValueToColor(playerData.color).color);
-        this.setDamping(false).setDrag(0).setMaxVelocity(800).setCollideWorldBounds(true);
+        this.originalColor = Phaser.Display.Color.ValueToColor(playerData.color).color;
+        this.setTint(this.originalColor);
+        
+        this.setDamping(true).setDrag(0.98).setMaxVelocity(600).setCollideWorldBounds(true);
         
         this.playerId = playerData.id;
         this.turning = 'none';
@@ -14,24 +16,23 @@ class Player extends Phaser.Physics.Arcade.Sprite {
     }
 
     updateMovement() {
-        const forwardSpeed = 600;
-        const turnSpeed = 350;
+        const forwardSpeed = 500;
+        const turnStrength = 3;   
+        const maxAngle = 40;      
+        const straighteningFactor = 0.05; 
 
-        this.body.velocity.y = -forwardSpeed;
-
-        switch (this.turning) {
-            case 'left':
-                this.body.velocity.x = -turnSpeed;
-                this.setAngle(-15);
-                break;
-            case 'right':
-                this.body.velocity.x = turnSpeed;
-                this.setAngle(15);
-                break;
-            case 'none':
-                this.body.velocity.x *= 0.85;
-                this.setAngle(this.angle * 0.85);
-                break;
+        if (this.turning === 'left') {
+            this.angle -= turnStrength;
+        } else if (this.turning === 'right') {
+            this.angle += turnStrength;
         }
+
+        this.angle = Phaser.Math.Clamp(this.angle, -maxAngle, maxAngle);
+
+        if (this.turning === 'none' && this.angle !== 0) {
+            this.angle *= (1 - straighteningFactor);
+        }
+
+        this.scene.physics.velocityFromAngle(this.angle - 90, forwardSpeed, this.body.velocity);
     }
 }
