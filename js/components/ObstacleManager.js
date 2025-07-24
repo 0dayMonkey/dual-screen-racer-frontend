@@ -5,7 +5,6 @@ class ObstacleManager {
             immovable: true
         });
 
-        // --- DEBUT DE LA MODIFICATION ---
         // Liste de toutes les textures d'obstacles disponibles
         this.obstacleTextures = [
             'obstacle_box',
@@ -16,7 +15,6 @@ class ObstacleManager {
             'obstacle_tree',
             'obstacle_rock'
         ];
-        // --- FIN DE LA MODIFICATION ---
     }
 
     getGroup() {
@@ -31,18 +29,16 @@ class ObstacleManager {
 
     _spawn(leadPlayer) {
         const scene = this.scene;
-        while (this.obstacles.getLength() < 20) { // Vous pouvez augmenter ce nombre pour plus de densité
-            // --- DEBUT DE LA MODIFICATION ---
+        while (this.obstacles.getLength() < 20) {
             // Choisir une texture aléatoire dans la liste
             const randomTexture = Phaser.Math.RND.pick(this.obstacleTextures);
 
-            // Certains obstacles (arbres, rochers) devraient apparaître plutôt sur l'herbe
             let spawnX;
             const roadLeftBoundary = scene.scale.width * 0.15;
             const roadRightBoundary = scene.scale.width * 0.85;
 
+            // Les arbres et rochers apparaissent sur l'herbe
             if (randomTexture === 'obstacle_tree' || randomTexture === 'obstacle_rock') {
-                // Apparaît sur le côté gauche OU le côté droit
                 if (Phaser.Math.Between(0, 1) === 0) {
                     spawnX = Phaser.Math.Between(0, roadLeftBoundary - 40);
                 } else {
@@ -52,11 +48,9 @@ class ObstacleManager {
                 // Les autres obstacles apparaissent sur la route
                 spawnX = Phaser.Math.Between(roadLeftBoundary, roadRightBoundary);
             }
-            // --- FIN DE LA MODIFICATION ---
 
             const spawnY = leadPlayer.y - 800 - (Math.random() * scene.scale.height * 1.5);
             
-            // On crée l'obstacle avec la texture choisie
             this.obstacles.create(spawnX, spawnY, randomTexture);
         }
     }
