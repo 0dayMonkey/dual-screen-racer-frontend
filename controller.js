@@ -73,7 +73,7 @@ function main() {
     }
     
     function connect() {
-        sessionCode = sessionCodeInput.value.toUpperCase();
+        sessionCode = sessionCodeInput.value;
         if (sessionCode.length !== 6) {
             setStatus('Le code doit faire 6 caractères.');
             return;
