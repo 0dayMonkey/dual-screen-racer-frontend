@@ -5,7 +5,18 @@
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>Dual Screen Racer - Écran de Jeu</title>
     <style>
-        body { margin: 0; background-color: #000; display: flex; justify-content: center; align-items: center; height: 100vh; }
+        /* On supprime toute marge et on s'assure que le canevas remplit l'espace */
+        * {
+            margin: 0;
+            padding: 0;
+        }
+        html, body {
+            overflow: hidden; /* Empêche les barres de défilement */
+            height: 100%;
+        }
+        canvas {
+            display: block; /* Supprime l'espace sous le canevas */
+        }
     </style>
 </head>
 <body>
