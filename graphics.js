@@ -1,12 +1,20 @@
 const GraphicsGenerator = {
     createAllTextures: function(scene) {
         this._createCarTexture(scene);
-        this._createObstacleTexture(scene);
         this._createParticleTexture(scene);
         this._createRoadTexture(scene);
+
+        // Appel de toutes les nouvelles fonctions de création d'obstacles
+        this._createBoxTexture(scene);      // L'ancien obstacle, renommé
+        this._createConeTexture(scene);
+        this._createTireTexture(scene);
+        this._createOilSpillTexture(scene);
+        this._createBarrierTexture(scene);
+        this._createTreeTexture(scene);
+        this._createRockTexture(scene);
     },
 
-    _createCarTexture: function(scene) {
+   _createCarTexture: function(scene) {
         const carWidth = 40;
         const carHeight = 80;
         const g = scene.make.graphics({ x: 0, y: 0, add: false });
@@ -25,31 +33,103 @@ const GraphicsGenerator = {
         g.destroy();
     },
 
-    _createObstacleTexture: function(scene) {
+    // --- DEBUT DES NOUVELLES TEXTURES D'OBSTACLES ---
+
+    _createBoxTexture: function(scene) { // Anciennement _createObstacleTexture
         const boxSize = 60;
         const g = scene.make.graphics({ x: 0, y: 0, add: false });
-
-        const topFace = [
-            { x: 0, y: 15 }, { x: boxSize, y: 15 },
-            { x: boxSize - 15, y: 0 }, { x: 15, y: 0 }
-        ];
-        const leftFace = [
-            { x: 0, y: 15 }, { x: 15, y: 0 },
-            { x: 15, y: boxSize - 15 }, { x: 0, y: boxSize }
-        ];
-        const rightFace = [
-            { x: boxSize, y: 15 }, { x: boxSize, y: boxSize },
-            { x: boxSize - 15, y: boxSize - 15 }, { x: boxSize - 15, y: 0 }
-        ];
-        
+        const topFace = [ { x: 0, y: 15 }, { x: boxSize, y: 15 }, { x: boxSize - 15, y: 0 }, { x: 15, y: 0 } ];
+        const leftFace = [ { x: 0, y: 15 }, { x: 15, y: 0 }, { x: 15, y: boxSize - 15 }, { x: 0, y: boxSize } ];
+        const rightFace = [ { x: boxSize, y: 15 }, { x: boxSize, y: boxSize }, { x: boxSize - 15, y: boxSize - 15 }, { x: boxSize - 15, y: 0 } ];
         g.fillStyle(0xab6f47, 1);
         g.fillPoints(topFace, true);
-        
         g.fillStyle(0x8B4513, 1);
         g.fillPoints(leftFace, true);
         g.fillPoints(rightFace, true);
+        g.generateTexture('obstacle_box', boxSize, boxSize); // Nouveau nom
+        g.destroy();
+    },
 
-        g.generateTexture('obstacle_texture', boxSize, boxSize);
+    _createConeTexture: function(scene) {
+        const g = scene.make.graphics({ x: 0, y: 0, add: false });
+        const coneWidth = 50;
+        const coneHeight = 60;
+        g.fillStyle(0x111111, 1); // Base noire
+        g.fillRect(0, coneHeight - 10, coneWidth, 10);
+        g.fillStyle(0xFF4500, 1); // Corps orange
+        g.fillTriangle(coneWidth / 2, 0, 0, coneHeight - 10, coneWidth, coneHeight - 10);
+        g.fillStyle(0xFFFFFF, 1); // Bande blanche
+        g.fillRect(0, coneHeight / 2, coneWidth, 8);
+        g.generateTexture('obstacle_cone', coneWidth, coneHeight);
+        g.destroy();
+    },
+
+    _createTireTexture: function(scene) {
+        const g = scene.make.graphics({ x: 0, y: 0, add: false });
+        const tireSize = 50;
+        g.fillStyle(0x1a1a1a, 1); // Pneu noir
+        g.fillCircle(tireSize / 2, tireSize / 2, tireSize / 2);
+        g.fillGradientStyle(0x555555, 0xcccccc, 0x555555, 0xcccccc, 1); // Jante grise
+        g.fillCircle(tireSize / 2, tireSize / 2, tireSize / 4);
+        g.generateTexture('obstacle_tire', tireSize, tireSize);
+        g.destroy();
+    },
+
+
+    _createOilSpillTexture: function(scene) {
+        const g = scene.make.graphics({ x: 0, y: 0, add: false });
+        const spillSize = 80;
+        g.fillStyle(0x0a0a0a, 0.8);
+        g.fillEllipse(spillSize / 2, spillSize / 2, spillSize, spillSize * 0.7);
+        g.fillStyle(0xFFFFFF, 0.3); // Reflet
+        g.fillEllipse(spillSize * 0.6, spillSize * 0.4, spillSize * 0.2, spillSize * 0.1);
+        g.generateTexture('obstacle_oil', spillSize, spillSize);
+        g.destroy();
+    },
+
+    _createBarrierTexture: function(scene) {
+        const g = scene.make.graphics({ x: 0, y: 0, add: false });
+        const barrierWidth = 100;
+        const barrierHeight = 40;
+        g.fillStyle(0x8B4513); // Pieds en bois
+        g.fillRect(5, 0, 10, barrierHeight);
+        g.fillRect(barrierWidth - 15, 0, 10, barrierHeight);
+        g.fillStyle(0xFFFFFF); // Planche
+        g.fillRect(0, 5, barrierWidth, 20);
+        g.fillStyle(0xFF0000); // Rayures rouges
+        for (let i = 0; i < barrierWidth; i += 20) {
+            g.fillRect(i + 5, 5, 10, 20);
+        }
+        g.generateTexture('obstacle_barrier', barrierWidth, barrierHeight);
+        g.destroy();
+    },
+
+    _createTreeTexture: function(scene) {
+        const g = scene.make.graphics({ x: 0, y: 0, add: false });
+        const treeSize = 80;
+        g.fillStyle(0x228B22, 1); // Feuillage
+        g.fillCircle(treeSize/2, treeSize/2, treeSize/2);
+        g.fillStyle(0x3CB371, 1);
+        g.fillCircle(treeSize*0.6, treeSize*0.6, treeSize/3);
+        g.fillStyle(0x8B4513, 1); // Tronc
+        g.fillCircle(treeSize/2, treeSize/2, 10);
+        g.generateTexture('obstacle_tree', treeSize, treeSize);
+        g.destroy();
+    },
+
+    _createRockTexture: function(scene) {
+        const g = scene.make.graphics({ x: 0, y: 0, add: false });
+        const rockSize = 70;
+        const points = [
+            {x: 0, y: rockSize * 0.3}, {x: rockSize * 0.5, y: 0},
+            {x: rockSize, y: rockSize * 0.4}, {x: rockSize * 0.8, y: rockSize},
+            {x: rockSize * 0.2, y: rockSize * 0.9}
+        ];
+        g.fillStyle(0x808080, 1);
+        g.fillPoints(points, true);
+        g.lineStyle(2, 0x505050, 1);
+        g.strokePoints(points, true);
+        g.generateTexture('obstacle_rock', rockSize, rockSize);
         g.destroy();
     },
     
@@ -90,4 +170,4 @@ const GraphicsGenerator = {
         g.generateTexture('road_texture', gameWidth, gameHeight);
         g.destroy();
     },
-};
+}
