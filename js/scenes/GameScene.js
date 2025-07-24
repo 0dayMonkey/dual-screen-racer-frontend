@@ -44,56 +44,37 @@ class GameScene extends Phaser.Scene {
         this.time.delayedCall(300, () => player.setTint(player.originalColor));
     }
 
-    update(time, delta) {
+    endGame() {
         if (!this.isGameRunning) return;
-
-        let leadPlayer = null;
-        let leadPlayerY = Number.MAX_VALUE;
+        this.isGameRunning = false;
+        
+        this.physics.pause();
+        // La caméra est déjà indépendante, pas besoin de stopFollow
 
         this.players.forEach(player => {
-            player.updateMovement(delta);
-            if (player.y < leadPlayerY) {
-                leadPlayerY = player.y;
-                leadPlayer = player;
-            }
+            this.finalScores.push({ id: player.playerId, score: player.score });
+            player.destroy();
         });
-        
-        if (!leadPlayer) {
-            if (this.isGameRunning) this.endGame();
-            return;
-        }
+        this.players.clear();
 
-        // --- NOUVELLE LOGIQUE DE CAMÉRA HYBRIDE ---
-        // 1. Définir une position cible pour la caméra, basée sur le leader.
-        // Le joueur en tête sera positionné à 80% du bas de l'écran.
-        const targetY = leadPlayer.y - this.scale.height * 0.8;
+        const rect = this.add.rectangle(this.cameras.main.centerX, this.cameras.main.centerY, 400, 300, 0x000000, 0.7).setScrollFactor(0);
+        const title = this.add.text(rect.x, rect.y - 120, 'Scores Finaux', { fontSize: '32px', fill: '#fff' }).setOrigin(0.5).setScrollFactor(0);
+        this.finalScores.sort((a, b) => b.score - a.score);
 
-        // 2. S'assurer que la caméra ne recule JAMAIS.
-        const newScrollY = Math.min(this.cameras.main.scrollY, targetY);
-
-        // 3. Déplacer la caméra verticalement de manière fluide vers sa nouvelle cible.
-        this.cameras.main.scrollY = Phaser.Math.Interpolation.Linear([this.cameras.main.scrollY, newScrollY], 0.05);
-
-        // 4. Le suivi horizontal reste le même pour suivre les virages du leader.
-        const targetX = leadPlayer.x - this.cameras.main.width / 2;
-        this.cameras.main.scrollX = Phaser.Math.Interpolation.Linear([this.cameras.main.scrollX, targetX], 0.05);
-        // --- FIN DE LA LOGIQUE DE CAMÉRA ---
-
-        this.road.y = this.cameras.main.worldView.centerY;
-        this.road.tilePositionY = this.cameras.main.scrollY;
-        
-        this.obstacleManager.update(leadPlayer);
-        
-        let currentLeadScore = 0;
-        this.players.forEach(player => {
-            player.score = Math.max(0, Math.floor(-(player.y - this.scale.height) / 10));
-            if (player.score > currentLeadScore) currentLeadScore = player.score;
+        this.finalScores.forEach((scoreEntry, index) => {
+            const playerInfo = this.playerInfo.find(p => p.id === scoreEntry.id);
+            const color = playerInfo ? playerInfo.color : '#FFFFFF';
+            const yPos = title.y + 60 + (index * 40);
+            this.add.text(rect.x, yPos, `Joueur ${index + 1}: ${scoreEntry.score}`, { fontSize: '24px' }).setOrigin(0.5).setScrollFactor(0).setTint(Phaser.Display.Color.ValueToColor(color).color);
         });
-        
-        if (currentLeadScore > this.highestScore) this.highestScore = currentLeadScore;
-        this.scoreText.setText('Score: ' + currentLeadScore);
-        
-        this.checkPlayerElimination();
+
+        if (this.socket) this.socket.emit('game_over', { score: this.highestScore, sessionCode: this.sessionCode });
+        this.time.delayedCall(10000, () => this.scene.start('LobbyScene', { socket: this.socket, sessionCode: this.sessionCode, players: this.playerInfo }));
+    }
+
+    setupSocketListeners() {
+        this.socket.on('start_turn', ({ playerId, direction }) => { if (this.players.has(playerId)) this.players.get(playerId).turning = direction; });
+        this.socket.on('stop_turn', ({ playerId }) => { if (this.players.has(playerId)) this.players.get(playerId).turning = 'none'; });
     }
     
     checkPlayerElimination() {
