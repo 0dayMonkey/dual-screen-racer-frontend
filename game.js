@@ -80,6 +80,9 @@ class GameScene extends Phaser.Scene {
         this.player.setDrag(0.98);
         this.player.setMaxVelocity(600);
         this.player.setCollideWorldBounds(true);
+        this.player.body.checkCollision.up = false;
+        this.player.body.checkCollision.down = false;
+
 
         this.cameras.main.startFollow(this.player, true, 0.09, 0.09);
         this.cameras.main.setZoom(1.2);
