@@ -44,37 +44,72 @@ class GameScene extends Phaser.Scene {
         this.time.delayedCall(300, () => player.setTint(player.originalColor));
     }
 
-    endGame() {
+    update(time, delta) {
         if (!this.isGameRunning) return;
-        this.isGameRunning = false;
+
+        // Si il n'y a plus de joueurs, on arrête tout
+        if (this.players.size === 0) {
+            if (this.isGameRunning) this.endGame();
+            return;
+        }
+
+        let leadPlayer = null;
+        let leadPlayerY = Number.MAX_VALUE;
         
-        this.physics.pause();
-        // La caméra est déjà indépendante, pas besoin de stopFollow
+        // MODIFICATION : Variables pour calculer l'écart entre les joueurs
+        let minX = Number.MAX_VALUE;
+        let maxX = Number.MIN_VALUE;
 
         this.players.forEach(player => {
-            this.finalScores.push({ id: player.playerId, score: player.score });
-            player.destroy();
+            player.updateMovement(delta);
+            // On cherche le joueur le plus haut (leader)
+            if (player.y < leadPlayerY) {
+                leadPlayerY = player.y;
+                leadPlayer = player;
+            }
+            // On cherche les positions extrêmes horizontales
+            minX = Math.min(minX, player.x);
+            maxX = Math.max(maxX, player.x);
         });
-        this.players.clear();
+        
+        // --- NOUVELLE LOGIQUE DE CAMÉRA DYNAMIQUE ---
 
-        const rect = this.add.rectangle(this.cameras.main.centerX, this.cameras.main.centerY, 400, 300, 0x000000, 0.7).setScrollFactor(0);
-        const title = this.add.text(rect.x, rect.y - 120, 'Scores Finaux', { fontSize: '32px', fill: '#fff' }).setOrigin(0.5).setScrollFactor(0);
-        this.finalScores.sort((a, b) => b.score - a.score);
+        // 1. Calcul du zoom nécessaire
+        const playerSpread = maxX - minX;
+        const padding = this.scale.width * 0.4; // Marge de 40% pour que ce ne soit pas collé aux bords
+        const targetZoom = Phaser.Math.Clamp(this.scale.width / (playerSpread + padding), 0.6, 1.2); // On limite le zoom min/max
 
-        this.finalScores.forEach((scoreEntry, index) => {
-            const playerInfo = this.playerInfo.find(p => p.id === scoreEntry.id);
-            const color = playerInfo ? playerInfo.color : '#FFFFFF';
-            const yPos = title.y + 60 + (index * 40);
-            this.add.text(rect.x, yPos, `Joueur ${index + 1}: ${scoreEntry.score}`, { fontSize: '24px' }).setOrigin(0.5).setScrollFactor(0).setTint(Phaser.Display.Color.ValueToColor(color).color);
+        // On applique le zoom de manière fluide
+        this.cameras.main.setZoom(Phaser.Math.Interpolation.Linear([this.cameras.main.zoom, targetZoom], 0.05));
+
+        // 2. Calcul du centrage horizontal
+        // On centre la caméra sur le milieu du groupe de joueurs
+        const groupCenterX = (minX + maxX) / 2;
+        const targetX = groupCenterX - this.cameras.main.width / 2;
+        this.cameras.main.scrollX = Phaser.Math.Interpolation.Linear([this.cameras.main.scrollX, targetX], 0.05);
+
+        // 3. Le suivi vertical du leader reste le même
+        const targetY = leadPlayer.y - this.scale.height * 0.8;
+        const newScrollY = Math.min(this.cameras.main.scrollY, targetY);
+        this.cameras.main.scrollY = Phaser.Math.Interpolation.Linear([this.cameras.main.scrollY, newScrollY], 0.05);
+
+        // --- FIN DE LA LOGIQUE DE CAMÉRA ---
+
+        this.road.y = this.cameras.main.worldView.centerY;
+        this.road.tilePositionY = this.cameras.main.scrollY;
+        
+        this.obstacleManager.update(leadPlayer);
+        
+        let currentLeadScore = 0;
+        this.players.forEach(player => {
+            player.score = Math.max(0, Math.floor(-(player.y - this.scale.height) / 10));
+            if (player.score > currentLeadScore) currentLeadScore = player.score;
         });
-
-        if (this.socket) this.socket.emit('game_over', { score: this.highestScore, sessionCode: this.sessionCode });
-        this.time.delayedCall(10000, () => this.scene.start('LobbyScene', { socket: this.socket, sessionCode: this.sessionCode, players: this.playerInfo }));
-    }
-
-    setupSocketListeners() {
-        this.socket.on('start_turn', ({ playerId, direction }) => { if (this.players.has(playerId)) this.players.get(playerId).turning = direction; });
-        this.socket.on('stop_turn', ({ playerId }) => { if (this.players.has(playerId)) this.players.get(playerId).turning = 'none'; });
+        
+        if (currentLeadScore > this.highestScore) this.highestScore = currentLeadScore;
+        this.scoreText.setText('Score: ' + currentLeadScore);
+        
+        this.checkPlayerElimination();
     }
     
     checkPlayerElimination() {
