@@ -72,6 +72,55 @@ function main() {
             wheelControls.classList.remove('hidden');
         }
     }
+    
+    // --- DEBUT DE LA CORRECTION : FONCTION RESTAURÉE ---
+    function checkForActiveSessions() {
+        setStatus('Recherche de session...');
+        const tempSocket = io(serverUrl, {
+            path: "/racer/socket.io/"
+        });
+        let attempts = 0;
+        const maxAttempts = 5;
+        const pollingInterval = setInterval(() => {
+            if (tempSocket.connected) {
+                attempts++;
+                if (attempts > maxAttempts) {
+                    clearInterval(pollingInterval);
+                    tempSocket.disconnect();
+                    setStatus('Aucune session trouvée.');
+                    return;
+                }
+                tempSocket.emit('request_active_sessions');
+            }
+        }, 1000);
+        tempSocket.on('active_session_found', (data) => {
+            if (data && data.sessionCode) {
+                clearInterval(pollingInterval);
+                setStatus('Session détectée !');
+                autoFillCode(data.sessionCode);
+                tempSocket.disconnect();
+            }
+        });
+        tempSocket.on('disconnect', () => {
+            clearInterval(pollingInterval);
+        });
+    }
+
+    function autoFillCode(code) {
+        let i = 0;
+        sessionCodeInput.value = '';
+        const interval = setInterval(() => {
+            if (i < code.length) {
+                sessionCodeInput.value += code[i];
+                i++;
+            } else {
+                clearInterval(interval);
+                connect();
+            }
+        }, 100);
+    }
+    // --- FIN DE LA CORRECTION ---
+
 
     // --- LOGIQUE SOCKET ---
     function setupSocketEvents() {
@@ -105,11 +154,9 @@ function main() {
 
     // --- LOGIQUE DE CONTROLES ---
     
-    // Mode Flèches
     function startTurn(direction) { socket.emit('start_turn', { sessionCode, direction }); }
     function stopTurn() { socket.emit('stop_turn', { sessionCode }); }
 
-    // Mode Volant
     function handleWheelMove(event) {
         if (!isDraggingWheel) return;
         event.preventDefault();
@@ -125,7 +172,7 @@ function main() {
         const deltaY = clientY - centerY;
 
         let angle = Math.atan2(deltaY, deltaX) * (180 / Math.PI) + 90;
-        angle = Math.max(-90, Math.min(90, angle)); // Limite l'angle à +/- 90 degrés
+        angle = Math.max(-90, Math.min(90, angle));
 
         steeringWheel.style.transform = `rotate(${angle}deg)`;
         socket.emit('steer', { sessionCode, angle });
@@ -134,7 +181,7 @@ function main() {
     function stopSteering() {
         if (!isDraggingWheel) return;
         isDraggingWheel = false;
-        // Retour progressif à 0
+        
         steeringWheel.style.transition = 'transform 0.2s ease-out';
         steeringWheel.style.transform = 'rotate(0deg)';
         socket.emit('steer', { sessionCode, angle: 0 });
@@ -148,17 +195,14 @@ function main() {
 
     // --- LISTENERS ---
     
-    // Listeners généraux
     connectButton.addEventListener('click', connect);
     nicknameInput.addEventListener('input', () => socket.emit('update_name', { sessionCode, name: nicknameInput.value || 'Joueur' }));
     readyButton.addEventListener('click', signalReady);
     restartButton.addEventListener('click', () => socket.emit('request_replay', { sessionCode }));
     
-    // Switch de mode
     arrowsModeBtn.addEventListener('click', () => switchControlMode('arrows'));
     wheelModeBtn.addEventListener('click', () => switchControlMode('wheel'));
 
-    // Listeners pour flèches
     leftButton.addEventListener('mousedown', () => startTurn('left'));
     leftButton.addEventListener('touchstart', (e) => { e.preventDefault(); startTurn('left'); });
     rightButton.addEventListener('mousedown', () => startTurn('right'));
@@ -168,7 +212,6 @@ function main() {
         rightButton.addEventListener(evt, stopTurn);
     });
 
-    // Listeners pour volant
     steeringWheel.addEventListener('mousedown', startSteering);
     steeringWheel.addEventListener('touchstart', startSteering);
     window.addEventListener('mousemove', handleWheelMove);
@@ -178,6 +221,7 @@ function main() {
 
     // Initialisation
     showView('connect');
+    checkForActiveSessions(); // Appel de la fonction restaurée
 }
 
 main();
