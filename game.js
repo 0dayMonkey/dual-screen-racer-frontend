@@ -3,7 +3,7 @@ class LobbyScene extends Phaser.Scene {
         super({ key: 'LobbyScene' });
         this.socket = null;
         this.sessionCodeText = null;
-        this.sessionCode = null; // Ajout pour stocker le code
+        this.sessionCode = null;
     }
 
     create() {
@@ -32,7 +32,7 @@ class LobbyScene extends Phaser.Scene {
 
         this.socket.on('session_created', (data) => {
             if (data && data.sessionCode) {
-                this.sessionCode = data.sessionCode; // On stocke le code
+                this.sessionCode = data.sessionCode;
                 this.sessionCodeText.setText(`Entrez ce code sur votre manette :\n\n${this.sessionCode}`);
             } else {
                 this.sessionCodeText.setText('Erreur : Code de session non reçu.');
@@ -40,7 +40,6 @@ class LobbyScene extends Phaser.Scene {
         });
 
         this.socket.on('connection_successful', () => {
-             // On passe le code de session à la scène de jeu
              this.scene.start('GameScene', { socket: this.socket, sessionCode: this.sessionCode });
         });
 
@@ -55,7 +54,7 @@ class GameScene extends Phaser.Scene {
     constructor() {
         super({ key: 'GameScene' });
         this.socket = null;
-        this.sessionCode = null; // Ajout pour recevoir le code
+        this.sessionCode = null;
         this.player = null;
         this.obstacles = null;
         this.scoreText = null;
@@ -63,19 +62,19 @@ class GameScene extends Phaser.Scene {
         this.isGameRunning = false;
         this.turning = 'none';
         
-        this.scrollSpeed = 400; // Vitesse de défilement du monde
+        this.scrollSpeed = 400;
         this.score = 0;
     }
 
     init(data) {
         this.socket = data.socket;
-        this.sessionCode = data.sessionCode; // On récupère le code de session
+        this.sessionCode = data.sessionCode;
     }
 
     create() {
         GraphicsGenerator.createAllTextures(this);
 
-        const roadWidth = this.scale.width * 0.7; // La route occupe 70% de la largeur
+        const roadWidth = this.scale.width * 0.7;
         const roadLeftBoundary = (this.scale.width - roadWidth) / 2;
         const roadRightBoundary = roadLeftBoundary + roadWidth;
         this.roadBoundaries = { left: roadLeftBoundary, right: roadRightBoundary, width: roadWidth };
@@ -83,7 +82,13 @@ class GameScene extends Phaser.Scene {
         this.road = this.add.tileSprite(this.scale.width / 2, this.scale.height / 2, this.scale.width, this.scale.height, 'road_texture');
 
         this.player = this.physics.add.sprite(this.scale.width / 2, this.scale.height * 0.8, 'car_texture');
-        this.player.setCollideWorldBounds(true); // Empêche la voiture de sortir de l'écran par défaut
+        this.player.setCollideWorldBounds(true);
+
+        // --- Début de la configuration de la physique du joueur ---
+        this.player.setDamping(true); // Active la prise en compte du "drag"
+        this.player.setDrag(0.95); // Applique une friction pour que la voiture ralentisse d'elle-même
+        this.player.setMaxVelocity(500); // Définit une vitesse horizontale maximale
+        // --- Fin de la configuration de la physique ---
 
         this.obstacles = this.physics.add.group();
         this.physics.add.collider(this.player, this.obstacles, this.playerHitObstacle, null, this);
@@ -96,21 +101,19 @@ class GameScene extends Phaser.Scene {
     }
     
     playerHitObstacle(player, obstacle) {
-        // Le simple contact avec un obstacle cause maintenant un Game Over
         this.gameOver();
     }
 
     update(time, delta) {
         if (!this.isGameRunning) return;
 
-        // Le monde défile à vitesse constante
         const scrollAmount = this.scrollSpeed * (delta / 1000);
         this.road.tilePositionY -= scrollAmount;
         this.obstacles.incY(scrollAmount);
 
+        // Appel de la logique de déplacement à chaque frame
         this.updatePlayerMovement();
 
-        // Le score est basé sur le temps survécu
         this.score += delta / 100;
         this.scoreText.setText('Score: ' + Math.floor(this.score));
         
@@ -118,27 +121,30 @@ class GameScene extends Phaser.Scene {
         this.cleanupObstacles();
     }
 
+    /**
+     * C'EST ICI LA NOUVELLE LOGIQUE DE DÉPLACEMENT DE LA VOITURE
+     * Elle utilise un système d'accélération pour un contrôle plus fluide.
+     */
     updatePlayerMovement() {
-        const acceleration = 1200; // Accélération plus élevée pour une meilleure réactivité
-        const maxSpeed = 500;
-        
-        // Appliquer une friction pour que la voiture s'arrête
-        this.player.body.setDamping(true);
-        this.player.body.setDrag(0.9);
-        this.player.body.setMaxVelocity(maxSpeed);
+        // La force d'accélération appliquée quand on tourne.
+        const acceleration = 1200; 
 
         if (this.turning === 'left') {
+            // Applique une force d'accélération vers la gauche.
             this.player.setAccelerationX(-acceleration);
         } else if (this.turning === 'right') {
+            // Applique une force d'accélération vers la droite.
             this.player.setAccelerationX(acceleration);
         } else {
+            // Si on ne tourne pas, aucune force n'est appliquée.
+            // La friction (setDrag) va progressivement ralentir et arrêter la voiture.
             this.player.setAccelerationX(0);
         }
     }
 
     cleanupObstacles() {
         this.obstacles.getChildren().forEach(obstacle => {
-            if (obstacle.y > this.scale.height + 100) { // Si l'obstacle est sorti par le bas
+            if (obstacle.y > this.scale.height + 100) {
                 obstacle.destroy();
             }
         });
@@ -173,12 +179,11 @@ class GameScene extends Phaser.Scene {
     }
 
     spawnObstaclesIfNeeded() {
-        // Augmentation de la fréquence d'apparition pour plus de défi
         if (this.obstacles.getLength() < 10 && Phaser.Math.Between(0, 100) > 90) { 
             const padding = 20; 
             const xPos = Phaser.Math.Between(this.roadBoundaries.left + padding, this.roadBoundaries.right - padding);
             const obstacle = this.obstacles.create(xPos, -50, 'obstacle_texture');
-            this.physics.add.existing(obstacle, false); // 'false' pour un corps statique
+            this.physics.add.existing(obstacle, false);
             obstacle.body.setImmovable(true);
         }
     }
@@ -190,29 +195,26 @@ class GameScene extends Phaser.Scene {
         
         const finalScore = Math.floor(this.score);
 
-        // **CORRECTION ERREUR PARTICULES** : Syntaxe moderne et fonctionnelle pour une explosion.
         this.add.particles(this.player.x, this.player.y, 'particle_texture', {
             speed: 200,
             scale: { start: 1, end: 0 },
             blendMode: 'ADD',
             lifespan: 600,
-            quantity: 40 // Le nombre de particules à émettre en une fois
+            quantity: 40
         });
         
         this.player.destroy();
         
-        // Envoi du code de session correct au serveur
         this.socket.emit('game_over', { score: finalScore, sessionCode: this.sessionCode });
 
         this.add.text(this.scale.width / 2, this.scale.height / 2, 'GAME OVER', { fontSize: '64px', fill: '#ff0000', fontStyle: 'bold' }).setOrigin(0.5);
     }
 }
 
-// **CORRECTION TAILLE ÉCRAN** : Nouvelle configuration avec le gestionnaire de taille.
 const config = {
     type: Phaser.AUTO,
     scale: {
-        mode: Phaser.Scale.FIT, // S'adapte à la fenêtre en gardant les proportions
+        mode: Phaser.Scale.FIT,
         autoCenter: Phaser.Scale.CENTER_BOTH,
         width: '100%',
         height: '100%'
