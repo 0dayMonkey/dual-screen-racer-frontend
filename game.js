@@ -36,7 +36,7 @@ class GameScene extends Phaser.Scene {
         this.socket = data.socket;
     }
 
-create() {
+    create() {
     GraphicsGenerator.createAllTextures(this);
 
     this.road = this.add.tileSprite(400, 300, 800, 600, 'road_texture'); // Taille ajustée
@@ -52,7 +52,7 @@ create() {
 
     this.setupSocketListeners();
     this.startCountdown();
-},
+}
     
     update(time) {
         if (!this.isGameRunning) return;
