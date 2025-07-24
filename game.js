@@ -204,21 +204,33 @@ class GameScene extends Phaser.Scene {
     update(time, delta) {
         if (!this.isGameRunning) return;
 
+        // On détermine quel joueur est en tête
         let leadPlayerY = 0;
+        let leadPlayerSprite = null;
         this.players.forEach(player => {
             this.updatePlayerMovement(player);
             if (player.sprite.y < leadPlayerY) {
                 leadPlayerY = player.sprite.y;
+                leadPlayerSprite = player.sprite;
             }
         });
 
+        // S'il n'y a pas de joueur en tête (par ex. au début), on arrête
+        if (!leadPlayerSprite) return;
+
+        // **CORRECTION DE LA RÉGRESSION**
+        // La position de la route et le défilement de sa texture
+        // sont maintenant basés sur la position du joueur en tête.
+        this.road.tilePositionY = leadPlayerSprite.y;
+        this.road.y = leadPlayerSprite.y;
+
+        // Calcul du score basé sur le meilleur score parmi les joueurs
         let leadScore = 0;
         this.players.forEach(player => {
             player.score = Math.max(0, Math.floor(-player.sprite.y / 10));
             if (player.score > leadScore) leadScore = player.score;
         });
 
-        this.road.tilePositionY = leadPlayerY;
         this.scoreText.setText('Score: ' + leadScore);
 
         this.spawnObstaclesIfNeeded();
