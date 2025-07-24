@@ -27,6 +27,14 @@ class GameScene extends Phaser.Scene {
             this.players.set(playerData.id, player);
             playerSprites.push(player);
         });
+        
+        // MODIFICATION 1 : On configure la caméra au démarrage.
+        // Cela évite un "saut" de caméra au début du jeu.
+        const firstPlayerSprite = this.players.values().next().value;
+        if (firstPlayerSprite) {
+            this.cameras.main.startFollow(firstPlayerSprite, true, 0.1, 0.1); // Le `true` est important ici pour un démarrage direct.
+            this.cameras.main.setZoom(1.2);
+        }
 
         this.physics.add.collider(playerSprites, this.obstacleManager.getGroup(), this.playerHitObstacle, null, this);
         this.scoreText = this.add.text(16, 16, 'Score: 0', { fontSize: '24px', fill: '#FFF', fontStyle: 'bold' }).setScrollFactor(0);
@@ -36,7 +44,7 @@ class GameScene extends Phaser.Scene {
     
     playerHitObstacle(player, obstacle) {
         player.body.velocity.y = 250; 
-        player.setTint(0xff0000); // La voiture devient rouge pour le choc
+        player.setTint(0xff0000);
         this.cameras.main.shake(100, 0.005);
         
         this.time.delayedCall(300, () => {
@@ -65,7 +73,10 @@ class GameScene extends Phaser.Scene {
             return;
         }
         
-        this.cameras.main.startFollow(leadPlayer, true, 0.09, 0.09);
+        // MODIFICATION 2 : On ajuste les valeurs de "lerp" pour un suivi fluide.
+        // Le `false` indique que si la cible de la caméra change, la transition sera douce.
+        this.cameras.main.startFollow(leadPlayer, false, 0.1, 0.1);
+        
         this.road.tilePositionY = leadPlayer.y;
         this.road.y = leadPlayer.y;
         this.obstacleManager.update(leadPlayer);
