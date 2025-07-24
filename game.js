@@ -4,45 +4,47 @@ class LobbyScene extends Phaser.Scene {
         this.socket = null;
         this.sessionCode = null;
         this.sessionCodeText = null;
-        // NOUVEAU : Map pour stocker les objets graphiques des joueurs (texte, icône prêt)
-        this.playerObjects = new Map(); 
+        this.playerObjects = new Map();
+        this.initialPlayers = [];
+    }
+
+    // CORRECTION : La méthode init est ajoutée pour recevoir des données d'une autre scène (utile pour le replay)
+    init(data) {
+        this.socket = data.socket;
+        this.sessionCode = data.sessionCode;
+        this.initialPlayers = data.players || [];
     }
 
     create() {
-        this.initializeSocketConnection();
-        this.setupSocketEvents();
-    }
-
-    initializeSocketConnection() {
-        this.socket = io("https://miaou.vps.webdock.cloud", { path: "/racer/socket.io/" });
+        // CORRECTION : La logique est divisée. Si le socket n'existe pas, c'est le premier lancement.
+        // S'il existe, c'est qu'on revient d'une partie et on ne recrée pas le socket ni les écouteurs.
+        if (!this.socket) {
+            // CORRECTION : L'appel à io() n'utilise plus d'options avec un chemin personnalisé.
+            this.socket = io("https://miaou.vps.webdock.cloud");
+            this.setupSocketEvents(); // Les écouteurs sont maintenant configurés UNE SEULE FOIS.
+            this.socket.emit('create_session');
+        } else {
+            // On revient au lobby, on redessine simplement l'état actuel.
+            this.redrawLobbyState();
+        }
     }
 
     setupSocketEvents() {
-        this.socket.on('connect', () => {
-            this.socket.emit('create_session');
-        });
-
         this.socket.on('session_created', (data) => {
             this.sessionCode = data.sessionCode;
-            // Affiche le code de session et les instructions
-            if (this.sessionCodeText) this.sessionCodeText.destroy();
-            this.sessionCodeText = this.add.text(this.scale.width / 2, 50, `Session: ${this.sessionCode}`, { fontSize: '40px', fontFamily: 'monospace' }).setOrigin(0.5);
-            this.add.text(this.scale.width / 2, 100, 'Les joueurs peuvent rejoindre...', { fontSize: '20px', fontFamily: 'monospace' }).setOrigin(0.5);
+            this.redrawLobbyState();
         });
 
-        // NOUVEAU : Gère l'arrivée d'un nouveau joueur dans le lobby
         this.socket.on('player_joined', (player) => {
             this.addPlayerToLobby(player);
         });
         
-        // NOUVEAU : Gère la mise à jour du statut d'un joueur
         this.socket.on('player_status_updated', ({ playerId, isReady }) => {
             if (this.playerObjects.has(playerId)) {
                 this.playerObjects.get(playerId).readyIndicator.setVisible(isReady);
             }
         });
 
-        // NOUVEAU : Gère le départ d'un joueur
         this.socket.on('player_left', ({ playerId }) => {
             if (this.playerObjects.has(playerId)) {
                 this.playerObjects.get(playerId).car.destroy();
@@ -52,18 +54,27 @@ class LobbyScene extends Phaser.Scene {
             }
         });
         
-        // NOUVEAU : Gère le lancement global du jeu
         this.socket.on('start_game_for_all', (data) => {
             this.scene.start('GameScene', { socket: this.socket, sessionCode: this.sessionCode, players: data.players });
         });
         
-        // NOUVEAU : Gère le retour au lobby
         this.socket.on('return_to_lobby', (data) => {
              this.scene.start('LobbyScene', { socket: this.socket, sessionCode: this.sessionCode, players: data.players });
         });
     }
+
+    redrawLobbyState() {
+        // Efface l'ancien affichage s'il existe
+        this.children.removeAll();
+        this.playerObjects.clear();
+        
+        if (this.sessionCode) {
+            this.sessionCodeText = this.add.text(this.scale.width / 2, 50, `Session: ${this.sessionCode}`, { fontSize: '40px', fontFamily: 'monospace' }).setOrigin(0.5);
+            this.add.text(this.scale.width / 2, 100, 'Les joueurs peuvent rejoindre...', { fontSize: '20px', fontFamily: 'monospace' }).setOrigin(0.5);
+        }
+        this.initialPlayers.forEach(player => this.addPlayerToLobby(player));
+    }
     
-    // NOUVELLE MÉTHODE pour ajouter un joueur à l'écran du lobby
     addPlayerToLobby(player) {
         const playerY = 150 + this.playerObjects.size * 100;
         const car = this.add.sprite(this.scale.width / 2, playerY, 'car_texture')
@@ -76,7 +87,6 @@ class LobbyScene extends Phaser.Scene {
 
         this.playerObjects.set(player.id, { car, readyIndicator });
 
-        // Animation d'entrée
         car.x = -100;
         this.tweens.add({
             targets: car,
@@ -86,7 +96,6 @@ class LobbyScene extends Phaser.Scene {
         });
     }
     
-    // NOUVELLE MÉTHODE pour repositionner les joueurs si l'un d'eux part
     repositionPlayers() {
         let i = 0;
         this.playerObjects.forEach(pObj => {
@@ -106,10 +115,8 @@ class LobbyScene extends Phaser.Scene {
 class GameScene extends Phaser.Scene {
     constructor() {
         super({ key: 'GameScene' });
-        // ... (propriétés existantes)
-        // CHANGEMENT : this.player devient this.players, une Map
         this.players = new Map();
-        this.playerInfo = []; // Pour stocker les données initiales des joueurs
+        this.playerInfo = [];
         this.socket = null;
         this.sessionCode = null;
         this.road = null;
@@ -121,16 +128,19 @@ class GameScene extends Phaser.Scene {
     init(data) {
         this.socket = data.socket;
         this.sessionCode = data.sessionCode;
-        // CHANGEMENT : On récupère la liste des joueurs
         this.playerInfo = data.players;
     }
 
     create() {
         GraphicsGenerator.createAllTextures(this);
         this.road = this.add.tileSprite(this.scale.width / 2, this.scale.height / 2, this.scale.width, this.scale.height, 'road_texture');
-        this.physics.world.setBounds(0, 0, this.scale.width, this.scale.height);
+        
+        // CORRECTION : Les limites du monde sont étendues verticalement pour permettre à la voiture d'avancer.
+        // Une grande valeur négative en Y permet de se déplacer "vers le haut" (la route défile vers le bas).
+        const worldHeight = 1000000;
+        this.physics.world.setBounds(0, -worldHeight, this.scale.width, worldHeight + this.scale.height);
 
-        // CHANGEMENT : Crée un sprite pour chaque joueur
+        this.players.clear();
         this.playerInfo.forEach((playerData, index) => {
             const startX = (this.scale.width / (this.playerInfo.length + 1)) * (index + 1);
             const playerSprite = this.physics.add.sprite(startX, this.scale.height - 150, 'car_texture')
@@ -138,7 +148,6 @@ class GameScene extends Phaser.Scene {
             
             playerSprite.setDamping(true).setDrag(0.98).setMaxVelocity(600).setCollideWorldBounds(true);
             
-            // On stocke le sprite et l'état de contrôle dans la Map des joueurs
             this.players.set(playerData.id, {
                 sprite: playerSprite,
                 turning: 'none',
@@ -146,7 +155,6 @@ class GameScene extends Phaser.Scene {
             });
         });
         
-        // La caméra suit le premier joueur pour le moment. Une caméra multi-joueurs serait plus complexe.
         const firstPlayerSprite = this.players.values().next().value.sprite;
         if(firstPlayerSprite) {
             this.cameras.main.startFollow(firstPlayerSprite, true, 0.09, 0.09);
@@ -154,7 +162,6 @@ class GameScene extends Phaser.Scene {
         }
         
         this.obstacles = this.physics.add.group();
-        // Le collider est maintenant pour tous les joueurs
         this.physics.add.collider(Array.from(this.players.values()).map(p => p.sprite), this.obstacles, this.playerHitObstacle, null, this);
         
         this.scoreText = this.add.text(16, 16, 'Score: 0', { fontSize: '24px', fill: '#FFF', fontStyle: 'bold' }).setScrollFactor(0);
@@ -164,75 +171,78 @@ class GameScene extends Phaser.Scene {
     }
     
     playerHitObstacle(playerSprite, obstacle) {
-        // Le jeu se termine pour tout le monde si un joueur est touché
         this.gameOver();
     }
 
     update(time, delta) {
         if (!this.isGameRunning) return;
 
-        // Met à jour chaque joueur
+        let leadPlayerY = 0;
         this.players.forEach(player => {
             this.updatePlayerMovement(player);
+            if (player.sprite.y < leadPlayerY) {
+                leadPlayerY = player.sprite.y;
+            }
         });
         
-        // Le score et la route suivent le joueur le plus avancé
-        let leadY = 0;
         let leadScore = 0;
         this.players.forEach(player => {
-            if(player.sprite.y < leadY) leadY = player.sprite.y;
             player.score = Math.max(0, Math.floor(-player.sprite.y / 10));
             if(player.score > leadScore) leadScore = player.score;
         });
 
-        this.road.tilePositionY += 5; // Défilement constant
+        this.road.tilePositionY = leadPlayerY;
         this.scoreText.setText('Score: ' + leadScore);
         
-        // La logique de spawn et de nettoyage reste similaire
         this.spawnObstaclesIfNeeded();
         this.cleanupObstacles();
     }
     
-    // La méthode de mouvement est maintenant appliquée à un joueur spécifique
     updatePlayerMovement(player) {
         const forwardSpeed = 500;
         const turnStrength = 3;
         const maxAngle = 40;
-        
-        const velocity = this.physics.velocityFromAngle(player.sprite.angle - 90, forwardSpeed);
-        player.sprite.setVelocity(velocity.x, velocity.y);
+        const straighteningFactor = 0.05;
 
         if (player.turning === 'left') {
-            player.sprite.angle = Phaser.Math.Clamp(player.sprite.angle - turnStrength, -maxAngle, maxAngle);
+            player.sprite.angle -= turnStrength;
         } else if (player.turning === 'right') {
-            player.sprite.angle = Phaser.Math.Clamp(player.sprite.angle + turnStrength, -maxAngle, maxAngle);
-        } else {
-             // Redressement automatique
-            if (player.sprite.angle !== 0) {
-                 player.sprite.angle *= 0.95;
-            }
+            player.sprite.angle += turnStrength;
         }
+
+        player.sprite.angle = Phaser.Math.Clamp(player.sprite.angle, -maxAngle, maxAngle);
+
+        if (player.turning === 'none' && player.sprite.angle !== 0) {
+            player.sprite.angle *= (1 - straighteningFactor);
+        }
+        
+        this.physics.velocityFromAngle(player.sprite.angle - 90, forwardSpeed, player.sprite.body.velocity);
     }
 
     cleanupObstacles() {
         const camera = this.cameras.main;
+        const leadPlayer = this.players.get(this.playerInfo[0].id);
+        if(!leadPlayer) return;
+
         this.obstacles.getChildren().forEach(obstacle => {
-            // Supprime les obstacles qui sont bien en dessous de la vue de la caméra
-            if (obstacle.y > camera.scrollY + camera.height + 200) {
+            if (obstacle.y > leadPlayer.sprite.y + camera.height) {
                 obstacle.destroy();
             }
         });
     }
 
     setupSocketListeners() {
-        // CHANGEMENT : Les événements de contrôle ciblent un joueur spécifique
+        // On s'assure de ne pas avoir de vieux écouteurs
+        this.socket.off('start_turn');
+        this.socket.off('stop_turn');
+
         this.socket.on('start_turn', ({ playerId, direction }) => {
             if (this.isGameRunning && this.players.has(playerId)) {
                 this.players.get(playerId).turning = direction;
             }
         });
         this.socket.on('stop_turn', ({ playerId }) => {
-            if (this.players.has(playerId)) {
+            if (this.isGameRunning && this.players.has(playerId)) {
                 this.players.get(playerId).turning = 'none';
             }
         });
@@ -244,7 +254,7 @@ class GameScene extends Phaser.Scene {
         }).setOrigin(0.5).setScrollFactor(0);
         
         let count = 3;
-        const timerEvent = this.time.addEvent({
+        this.time.addEvent({
             delay: 1000,
             callback: () => {
                 count--;
@@ -263,13 +273,14 @@ class GameScene extends Phaser.Scene {
     }
     
     spawnObstaclesIfNeeded() {
-        if(this.obstacles.getLength() < 20) { // Maintient un certain nombre d'obstacles
-            const camera = this.cameras.main;
-            const spawnY = camera.scrollY - 200; // Apparaît au-dessus de l'écran
+        const leadPlayer = this.players.get(this.playerInfo[0].id);
+        if(!leadPlayer) return;
+
+        while(this.obstacles.getLength() < 20) {
+            const spawnY = leadPlayer.sprite.y - 800 - (Math.random() * this.scale.height);
             const spawnX = Phaser.Math.Between(this.scale.width * 0.2, this.scale.width * 0.8);
             
-            const obstacle = this.obstacles.create(spawnX, spawnY, 'obstacle_texture');
-            obstacle.body.setImmovable(true);
+            this.obstacles.create(spawnX, spawnY, 'obstacle_texture');
         }
     }
     
@@ -286,7 +297,9 @@ class GameScene extends Phaser.Scene {
             fontSize: '64px', fill: '#ff0000', fontStyle: 'bold' 
         }).setOrigin(0.5).setScrollFactor(0);
         
-        this.socket.emit('game_over', { score: finalScore, sessionCode: this.sessionCode });
+        if (this.socket) {
+            this.socket.emit('game_over', { score: finalScore, sessionCode: this.sessionCode });
+        }
     }
 }
 
@@ -302,7 +315,6 @@ const config = {
         default: 'arcade',
         arcade: {
             gravity: { y: 0 }
-            //, debug: true // Décommenter pour voir les boîtes de collision
         }
     },
     scene: [LobbyScene, GameScene]
