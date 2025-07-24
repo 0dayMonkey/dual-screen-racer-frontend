@@ -1,18 +1,19 @@
 function main() {
     const serverUrl = "https://miaou.vps.webdock.cloud";
-    const socketOptions = { path: "/racer/socket.io/" };
+    // CORRECTION : L'objet socketOptions avec le chemin personnalisé a été supprimé.
+    // Le client utilisera maintenant le chemin par défaut '/socket.io/' qui correspond au serveur.
     let socket = null;
     let sessionCode = '';
 
     const statusDiv = document.getElementById('status');
     const connectionWrapper = document.getElementById('connection-wrapper');
-    const lobbyWrapper = document.getElementById('lobby-wrapper'); // NOUVEAU
+    const lobbyWrapper = document.getElementById('lobby-wrapper');
     const controlsWrapper = document.getElementById('controls-wrapper');
     const gameOverWrapper = document.getElementById('game-over-wrapper');
 
     const sessionCodeInput = document.getElementById('session-code-input');
     const connectButton = document.getElementById('connect-button');
-    const readyButton = document.getElementById('ready-button'); // NOUVEAU
+    const readyButton = document.getElementById('ready-button');
     const leftButton = document.getElementById('left-button');
     const rightButton = document.getElementById('right-button');
     const finalScoreText = document.getElementById('final-score');
@@ -24,13 +25,13 @@ function main() {
     
     function showView(viewName) {
         connectionWrapper.classList.add('hidden');
-        lobbyWrapper.classList.add('hidden'); // NOUVEAU
+        lobbyWrapper.classList.add('hidden');
         controlsWrapper.classList.add('hidden');
         gameOverWrapper.classList.add('hidden');
         
         const viewMap = {
             'connect': connectionWrapper,
-            'lobby': lobbyWrapper, // NOUVEAU
+            'lobby': lobbyWrapper,
             'controls': controlsWrapper,
             'gameover': gameOverWrapper
         };
@@ -52,22 +53,17 @@ function main() {
         socket.on('invalid_session', () => setStatus('Code de session invalide ou partie déjà commencée.'));
         socket.on('session_closed', () => { setStatus('La session de jeu a été fermée par l\'hôte.'); showView('connect'); socket.disconnect(); });
 
-        // CHANGEMENT : 'connection_successful' est remplacé par 'lobby_joined'
         socket.on('lobby_joined', (data) => {
-            // Réactive le bouton "Prêt" pour une nouvelle partie
             readyButton.disabled = false;
             readyButton.textContent = "Prêt";
             showView('lobby');
         });
 
-        // NOUVEAU : Le serveur confirme le lancement du jeu pour tous.
         socket.on('start_game_for_all', () => {
             showView('controls');
         });
 
-        // NOUVEAU : Gère le retour au lobby pour une nouvelle partie.
         socket.on('return_to_lobby', () => {
-             // Réactive le bouton "Prêt" et affiche le lobby
             readyButton.disabled = false;
             readyButton.textContent = "Prêt";
             showView('lobby');
@@ -96,7 +92,8 @@ function main() {
         
         setStatus('Tentative de connexion...');
         if (!socket || !socket.connected) {
-            socket = io(serverUrl, socketOptions);
+            // CORRECTION : L'appel à io() n'utilise plus socketOptions.
+            socket = io(serverUrl);
             setupSocketEvents();
             socket.on('connect', () => {
                  setStatus('Connecté au serveur. Envoi du code de session...');
@@ -107,20 +104,19 @@ function main() {
         }
     }
 
-    // NOUVELLE FONCTION : Le joueur signale qu'il est prêt.
     function signalReady() {
         if (socket && socket.connected) {
             socket.emit('player_ready', { sessionCode });
             readyButton.textContent = "En attente...";
-            readyButton.disabled = true; // Empêche les clics multiples
+            readyButton.disabled = true;
         }
     }
     
     function requestReplay() {
         if(socket && socket.connected) socket.emit('request_replay', { sessionCode });
     }
-    
-function autoFillCode(code) {
+
+    function autoFillCode(code) {
         let i = 0;
         sessionCodeInput.value = '';
         const interval = setInterval(() => {
@@ -136,7 +132,8 @@ function autoFillCode(code) {
 
     function checkForActiveSessions() {
         setStatus('Recherche de session...');
-        const tempSocket = io(serverUrl, socketOptions);
+        // CORRECTION : L'appel à io() n'utilise plus socketOptions.
+        const tempSocket = io(serverUrl);
         let attempts = 0;
         const maxAttempts = 5;
 
@@ -177,11 +174,10 @@ function autoFillCode(code) {
         }
     }
 
-
     addEventListeners(leftButton, () => startTurn('left'), stopTurn);
     addEventListeners(rightButton, () => startTurn('right'), stopTurn);
     connectButton.addEventListener('click', connect);
-    readyButton.addEventListener('click', signalReady); // NOUVEAU
+    readyButton.addEventListener('click', signalReady);
     restartButton.addEventListener('click', requestReplay);
     
     showView('connect');
@@ -189,5 +185,3 @@ function autoFillCode(code) {
 }
 
 main();
-
-    
