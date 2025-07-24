@@ -24,21 +24,28 @@ class GameScene extends Phaser.Scene {
 
         this.obstacleManager = new ObstacleManager(this);
 
+        // --- DEBUT DE LA MODIFICATION ---
+        // On définit la zone où les voitures peuvent apparaître.
+        const roadWidth = this.scale.width * 0.70; // La route fait 70% de l'écran
+        const roadLeftBoundary = this.scale.width * 0.15; // Elle commence à 15% du bord
+        const spawnableWidth = roadWidth - 60; // On retire une marge pour ne pas être collé au bord
+
         this.playerInfo.forEach((playerData, index) => {
-            const startX = (this.scale.width / (this.playerInfo.length + 1)) * (index + 1);
+            // On calcule la position de chaque joueur à l'intérieur de la zone de la route.
+            const spacing = spawnableWidth / (this.playerInfo.length);
+            const startX = roadLeftBoundary + 30 + (index * spacing);
+
             const player = new Player(this, startX, this.scale.height - 150, playerData);
             this.players.set(playerData.id, player);
+        // --- FIN DE LA MODIFICATION ---
 
-            // --- LA CORRECTION EST ICI ---
-            // En ajoutant .setScrollFactor(0), on dit à Phaser :
-            // "Cet objet ne doit jamais bouger, même si la caméra se déplace."
             const scoreText = this.add.text(16, 16 + (index * 30), `${player.name}: 0`, { 
                 fontSize: '20px', 
                 fill: '#FFF', 
                 fontStyle: 'bold',
-                stroke: '#000', // Ajout d'un contour noir pour la lisibilité
+                stroke: '#000',
                 strokeThickness: 4
-            }).setScrollFactor(0); // C'est la ligne la plus importante !
+            }).setScrollFactor(0);
 
             scoreText.setTint(Phaser.Display.Color.ValueToColor(playerData.color).color);
             this.scoreDisplays.set(playerData.id, scoreText);
@@ -169,8 +176,12 @@ class GameScene extends Phaser.Scene {
         });
         this.players.clear();
 
-        const rect = this.add.rectangle(this.cameras.main.worldView.centerX, this.cameras.main.worldView.centerY, 400, 300, 0x000000, 0.7).setScrollFactor(0);
-        const title = this.add.text(rect.x, rect.y - 120, 'Scores Finaux', { fontSize: '32px', fill: '#fff' }).setOrigin(0.5).setScrollFactor(0);
+        const screenCenterX = this.scale.width / 2;
+        const screenCenterY = this.scale.height / 2;
+
+        const rect = this.add.rectangle(screenCenterX, screenCenterY, 400, 300, 0x000000, 0.7).setScrollFactor(0);
+        
+        const title = this.add.text(screenCenterX, screenCenterY - 120, 'Scores Finaux', { fontSize: '32px', fill: '#fff' }).setOrigin(0.5).setScrollFactor(0);
         
         this.finalScores.sort((a, b) => b.score - a.score);
 
@@ -179,7 +190,7 @@ class GameScene extends Phaser.Scene {
             const color = playerInfo ? playerInfo.color : '#FFFFFF';
             const name = scoreEntry.name || 'Joueur';
             const yPos = title.y + 60 + (index * 40);
-            this.add.text(rect.x, yPos, `${name}: ${scoreEntry.score}`, { fontSize: '24px' }).setOrigin(0.5).setScrollFactor(0).setTint(Phaser.Display.Color.ValueToColor(color).color);
+            this.add.text(screenCenterX, yPos, `${name}: ${scoreEntry.score}`, { fontSize: '24px' }).setOrigin(0.5).setScrollFactor(0).setTint(Phaser.Display.Color.ValueToColor(color).color);
         });
 
         if (this.socket) this.socket.emit('game_over', { score: this.finalScores.length > 0 ? this.finalScores[0].score : 0, sessionCode: this.sessionCode });
