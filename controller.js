@@ -11,6 +11,8 @@ function main() {
     const sessionCodeInput = document.getElementById('session-code-input');
     const connectButton = document.getElementById('connect-button');
     const readyButton = document.getElementById('ready-button');
+    const nicknameInput = document.getElementById('nickname-input');
+
     const leftButton = document.getElementById('left-button');
     const rightButton = document.getElementById('right-button');
     const finalScoreText = document.getElementById('final-score');
@@ -120,8 +122,11 @@ function main() {
 
     function signalReady() {
         if (socket && socket.connected) {
+            const name = nicknameInput.value || 'Joueur';
+
             socket.emit('player_ready', {
-                sessionCode
+                sessionCode,
+                name: name,
             });
             readyButton.textContent = "En attente...";
             readyButton.disabled = true;
