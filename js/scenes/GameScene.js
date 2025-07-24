@@ -3,8 +3,6 @@ class GameScene extends Phaser.Scene {
         super({ key: 'GameScene' });
         this.players = new Map();
         this.isGameRunning = false;
-        // MODIFICATION: On ajoute un état pour la fin de partie
-        this.isGameOver = false;
     }
 
     init(data) {
@@ -14,7 +12,6 @@ class GameScene extends Phaser.Scene {
     }
 
     create() {
-        this.isGameOver = false; // Réinitialiser l'état à la création
         this.road = this.add.tileSprite(this.scale.width / 2, this.scale.height / 2, this.scale.width, this.scale.height, 'road_texture');
         this.physics.world.setBounds(0, -1000000, this.scale.width, 1000000 + this.scale.height);
 
@@ -32,19 +29,35 @@ class GameScene extends Phaser.Scene {
         this.physics.add.collider(playerSprites, this.obstacleManager.getGroup(), this.playerHitObstacle, null, this);
 
         this.scoreText = this.add.text(16, 16, 'Score: 0', { fontSize: '24px', fill: '#FFF', fontStyle: 'bold' }).setScrollFactor(0);
-        this.playersAliveText = this.add.text(this.scale.width - 16, 16, '', { fontSize: '24px', fill: '#FFF', fontStyle: 'bold' }).setOrigin(1, 0).setScrollFactor(0);
-
 
         this.setupSocketListeners();
         this.startCountdown();
     }
 
+    // MODIFICATION : La collision n'est plus éliminatoire mais applique une pénalité physique.
+    playerHitObstacle(player, obstacle) {
+        // Appliquer un "choc" en inversant brièvement la vélocité verticale
+        player.body.velocity.y = 250; 
+
+        // Ajouter un effet visuel pour le choc
+        player.setTint(0xff0000); // Le joueur devient rouge
+        this.cameras.main.shake(100, 0.005); // Secousse légère de la caméra
+        
+        // Retirer le tint après un court instant
+        this.time.delayedCall(300, () => {
+            player.clearTint();
+        });
+        
+        // L'obstacle n'est PAS détruit, il reste une barrière.
+    }
+
     update(time, delta) {
-        if (!this.isGameRunning || this.isGameOver) return;
+        if (!this.isGameRunning) return;
 
         let leadPlayer = null;
         let leadPlayerY = Number.MAX_VALUE;
 
+        // Met à jour le mouvement de tous les joueurs et trouve celui en tête
         this.players.forEach(player => {
             player.updateMovement();
             if (player.y < leadPlayerY) {
@@ -52,95 +65,102 @@ class GameScene extends Phaser.Scene {
                 leadPlayer = player;
             }
         });
-        
+
         if (!leadPlayer) {
-             // S'il n'y a plus de joueur en tête (tout le monde a été éliminé)
-            if (this.players.size === 0 && !this.isGameOver) {
-                this.gameOver(); // On termine la partie
+            // S'il n'y a plus de joueur en tête (ex: dernier joueur éliminé), on termine la partie.
+            if (this.players.size > 0) {
+                 this.endGame();
             }
             return;
         }
-
+        
+        // Mise à jour de la caméra et de l'environnement
         this.cameras.main.startFollow(leadPlayer, true, 0.09, 0.09);
         this.road.tilePositionY = leadPlayer.y;
         this.road.y = leadPlayer.y;
 
+        // Mise à jour des obstacles et du score
         this.obstacleManager.update(leadPlayer);
         
-        // MODIFICATION: Logique d'élimination si un joueur sort de l'écran
-        const cameraBottom = this.cameras.main.worldView.bottom;
-        const playersToDelete = [];
-
-        this.players.forEach(player => {
-            if (player.y > cameraBottom + player.displayHeight / 2) {
-                playersToDelete.push(player);
-            }
-        });
-
-        playersToDelete.forEach(player => this.eliminatePlayer(player));
-
-        // MODIFICATION: Vérification de la condition de victoire (dernier joueur en vie)
-        if (this.players.size <= 1 && this.playerInfo.length > 1) {
-            this.gameOver(leadPlayer); // Le joueur en tête est le gagnant
-        }
-        
-        // Mise à jour des scores et textes
         let leadScore = 0;
         this.players.forEach(player => {
             player.score = Math.max(0, Math.floor(-player.y / 10));
             if (player.score > leadScore) leadScore = player.score;
         });
         this.scoreText.setText('Score: ' + leadScore);
-        this.playersAliveText.setText(`Joueurs: ${this.players.size} / ${this.playerInfo.length}`);
+
+        // MODIFICATION : Logique d'élimination par la caméra
+        this.checkPlayerElimination();
     }
     
-    // MODIFICATION: La collision ne termine plus le jeu, elle pénalise le joueur
-    playerHitObstacle(player, obstacle) {
-        if (player.isStunned) return; // Ignore les collisions si déjà sonné
+    // MODIFICATION : Nouvelle fonction pour vérifier si des joueurs sont hors champ
+    checkPlayerElimination() {
+        const cameraBounds = this.cameras.main.worldView;
+        const playersToEliminate = [];
 
-        obstacle.destroy(); // On peut garder la destruction de l'obstacle
-        
-        // Effet de "stun"
-        player.isStunned = true;
-        player.setTint(0xff6666); // Flash rouge
-        player.body.velocity.y = 150; // Rebond en arrière
-        player.body.velocity.x = 0;
-
-        const particles = this.add.particles(0, 0, 'particle_texture', { speed: 100, scale: { start: 1, end: 0 }, lifespan: 400, gravityY: 300 });
-        particles.emitParticleAt(player.x, player.y, 8);
-
-        // Le joueur reprend le contrôle après une courte période
-        this.time.delayedCall(700, () => {
-            player.isStunned = false;
-            player.clearTint();
+        this.players.forEach(player => {
+            // Si la position Y du joueur est en dessous du bas de la caméra, il est éliminé
+            if (player.y > cameraBounds.bottom + 50) { // On ajoute une petite marge de 50px
+                playersToEliminate.push(player.playerId);
+            }
         });
+
+        // On supprime les joueurs éliminés
+        playersToEliminate.forEach(playerId => {
+            if (this.players.has(playerId)) {
+                const player = this.players.get(playerId);
+                
+                // Effet visuel pour l'élimination
+                const particles = this.add.particles(0, 0, 'particle_texture', { speed: 150, scale: { start: 1.2, end: 0 }, lifespan: 1000, gravityY: 200 });
+                particles.emitParticleAt(player.x, player.y, 20);
+                
+                player.destroy(); // Supprime le sprite du joueur
+                this.players.delete(playerId); // Supprime le joueur de la liste des joueurs actifs
+            }
+        });
+        
+        // MODIFICATION : Condition de fin de partie. S'il reste 1 joueur ou moins, la partie se termine.
+        if (this.isGameRunning && this.players.size <= 1) {
+            this.endGame();
+        }
     }
 
-    // NOUVELLE FONCTION: Pour gérer l'élimination d'un joueur
-    eliminatePlayer(player) {
-        if (!this.players.has(player.playerId)) return; // Déjà éliminé
+    // MODIFICATION : L'ancienne fonction gameOver() est renommée et adaptée pour la fin de partie
+    endGame() {
+        if (!this.isGameRunning) return;
+        this.isGameRunning = false;
+        
+        this.physics.pause();
+        this.cameras.main.stopFollow();
+        
+        let winnerText = 'FIN DE LA PARTIE';
+        let finalScore = 0;
 
-        // 1. Notifier le serveur (qui notifiera le contrôleur)
-        this.socket.emit('player_eliminated', { 
-            sessionCode: this.sessionCode, 
-            playerId: player.playerId 
-        });
+        // S'il reste un joueur, il est le gagnant
+        if (this.players.size === 1) {
+            const winner = this.players.values().next().value;
+            winnerText = 'VAINQUEUR !';
+            finalScore = winner.score;
+            this.cameras.main.startFollow(winner); // La caméra se centre sur le vainqueur
+        } else {
+             // Si tout le monde a été éliminé, on prend le meilleur score calculé
+             this.players.forEach(p => { if (p.score > finalScore) finalScore = p.score; });
+        }
 
-        // 2. Effet visuel
-        const particles = this.add.particles(0, 0, 'particle_texture', { speed: 200, scale: { start: 1.2, end: 0 }, lifespan: 1000, gravityY: 200, blendMode: 'ADD' });
-        particles.emitParticleAt(player.x, player.y, 30);
 
-        // 3. Retirer le joueur du jeu
-        this.players.delete(player.playerId);
-        player.destroy();
+        this.add.text(this.cameras.main.worldView.x + this.scale.width / 2, this.cameras.main.worldView.y + this.scale.height / 2, winnerText, { fontSize: '64px', fill: '#00ff00' }).setOrigin(0.5);
+        
+        if (this.socket) {
+            this.socket.emit('game_over', { score: finalScore, sessionCode: this.sessionCode });
+        }
     }
 
     setupSocketListeners() {
         this.socket.on('start_turn', ({ playerId, direction }) => {
-            if (this.isGameRunning && this.players.has(playerId)) this.players.get(playerId).turning = direction;
+            if (this.players.has(playerId)) this.players.get(playerId).turning = direction;
         });
         this.socket.on('stop_turn', ({ playerId }) => {
-            if (this.isGameRunning && this.players.has(playerId)) this.players.get(playerId).turning = 'none';
+            if (this.players.has(playerId)) this.players.get(playerId).turning = 'none';
         });
     }
 
@@ -159,39 +179,6 @@ class GameScene extends Phaser.Scene {
                 }
             },
             repeat: 3
-        });
-    }
-
-    // MODIFICATION: La fonction peut maintenant accepter un gagnant
-    gameOver(winner = null) {
-        if (this.isGameOver) return;
-        this.isGameOver = true;
-
-        this.isGameRunning = false;
-        this.physics.pause();
-        this.cameras.main.stopFollow();
-        this.cameras.main.shake(300, 0.008);
-
-        let finalScore = 0;
-        let message = "GAME OVER";
-
-        if(winner) {
-            message = `VAINQUEUR !`;
-            finalScore = winner.score;
-            // On fait un zoom sur le gagnant
-            this.cameras.main.pan(winner.x, winner.y, 1000, 'Cubic.easeOut');
-            this.cameras.main.zoomTo(1.8, 1000, 'Cubic.easeOut');
-        }
-
-        // Affiche le message de fin
-        this.add.text(this.cameras.main.worldView.x + this.scale.width / 2, this.cameras.main.worldView.y + this.scale.height / 2, message, { fontSize: '64px', fill: '#00ff00', fontStyle: 'bold' }).setOrigin(0.5);
-
-        // On attend un peu avant de notifier les manettes, pour laisser le temps à l'animation
-        this.time.delayedCall(3000, () => {
-            this.socket.emit('game_over', { 
-                score: finalScore, 
-                sessionCode: this.sessionCode 
-            });
         });
     }
 }
