@@ -57,12 +57,10 @@ class GameScene extends Phaser.Scene {
         this.sessionCode = null;
         this.player = null;
         this.obstacles = null;
-        this.scoreText = null;
         this.road = null;
+        this.scoreText = null;
         this.isGameRunning = false;
         this.turning = 'none';
-        
-        this.scrollSpeed = 400;
         this.score = 0;
     }
 
@@ -74,27 +72,24 @@ class GameScene extends Phaser.Scene {
     create() {
         GraphicsGenerator.createAllTextures(this);
 
-        const roadWidth = this.scale.width * 0.7;
-        const roadLeftBoundary = (this.scale.width - roadWidth) / 2;
-        const roadRightBoundary = roadLeftBoundary + roadWidth;
-        this.roadBoundaries = { left: roadLeftBoundary, right: roadRightBoundary, width: roadWidth };
-        
+        // La route est un grand sprite qui défile
         this.road = this.add.tileSprite(this.scale.width / 2, this.scale.height / 2, this.scale.width, this.scale.height, 'road_texture');
 
-        this.player = this.physics.add.sprite(this.scale.width / 2, this.scale.height * 0.8, 'car_texture');
-        this.player.setCollideWorldBounds(true);
+        // Création du joueur au centre
+        this.player = this.physics.add.sprite(this.scale.width / 2, this.scale.height / 2, 'car_texture');
+        this.player.setDamping(true);
+        this.player.setDrag(0.98);
+        this.player.setMaxVelocity(600);
 
-        // --- Début de la configuration de la physique du joueur ---
-        this.player.setDamping(true); // Active la prise en compte du "drag"
-        this.player.setDrag(0.95); // Applique une friction pour que la voiture ralentisse d'elle-même
-        this.player.setMaxVelocity(500); // Définit une vitesse horizontale maximale
-        // --- Fin de la configuration de la physique ---
+        // La caméra suit le joueur
+        this.cameras.main.startFollow(this.player, true, 0.09, 0.09);
+        this.cameras.main.setZoom(1.2);
 
         this.obstacles = this.physics.add.group();
         this.physics.add.collider(this.player, this.obstacles, this.playerHitObstacle, null, this);
 
         this.score = 0;
-        this.scoreText = this.add.text(16, 16, 'Score: 0', { fontSize: '24px', fill: '#FFF', fontStyle: 'bold' });
+        this.scoreText = this.add.text(16, 16, 'Score: 0', { fontSize: '24px', fill: '#FFF', fontStyle: 'bold' }).setScrollFactor(0);
 
         this.setupSocketListeners();
         this.startCountdown();
@@ -107,62 +102,71 @@ class GameScene extends Phaser.Scene {
     update(time, delta) {
         if (!this.isGameRunning) return;
 
-        const scrollAmount = this.scrollSpeed * (delta / 1000);
-        this.road.tilePositionY -= scrollAmount;
-        this.obstacles.incY(scrollAmount);
-
-        // Appel de la logique de déplacement à chaque frame
+        // Mise à jour du mouvement et de la physique du joueur
         this.updatePlayerMovement();
 
-        this.score += delta / 100;
-        this.scoreText.setText('Score: ' + Math.floor(this.score));
+        // Le défilement de la route est basé sur la position du joueur pour donner une illusion de vitesse
+        this.road.tilePositionY = this.player.y;
+
+        // Le score est basé sur la distance parcourue (position Y négative)
+        this.score = Math.max(0, Math.floor(-this.player.y / 10));
+        this.scoreText.setText('Score: ' + this.score);
         
         this.spawnObstaclesIfNeeded();
-        this.cleanupObstacles();
+        this.checkBoundaries();
     }
 
     /**
-     * C'EST ICI LA NOUVELLE LOGIQUE DE DÉPLACEMENT DE LA VOITURE
-     * Elle utilise un système d'accélération pour un contrôle plus fluide.
+     * LOGIQUE DE PHYSIQUE CONFORME À VOTRE DEMANDE
      */
     updatePlayerMovement() {
-        // La force d'accélération appliquée quand on tourne.
-        const acceleration = 1200; 
+        // 1. Mouvement avant constant
+        const forwardSpeed = 500;
 
+        // 2. Mécanique de rotation
+        const turnStrength = 3; // Force de la rotation
         if (this.turning === 'left') {
-            // Applique une force d'accélération vers la gauche.
-            this.player.setAccelerationX(-acceleration);
+            this.player.angle -= turnStrength;
         } else if (this.turning === 'right') {
-            // Applique une force d'accélération vers la droite.
-            this.player.setAccelerationX(acceleration);
-        } else {
-            // Si on ne tourne pas, aucune force n'est appliquée.
-            // La friction (setDrag) va progressivement ralentir et arrêter la voiture.
-            this.player.setAccelerationX(0);
+            this.player.angle += turnStrength;
         }
+
+        // 3. Angle de braquage limité
+        const maxAngle = 40; // Angle maximal en degrés
+        this.player.angle = Phaser.Math.Clamp(this.player.angle, -maxAngle, maxAngle);
+
+        // 4. Force de recentrage automatique
+        const straighteningFactor = 0.05; // Vitesse de redressement
+        if (this.turning === 'none' && this.player.angle !== 0) {
+            this.player.angle *= (1 - straighteningFactor);
+        }
+
+        // Applique la vitesse dans la direction où la voiture pointe
+        // L'angle 0 est vers la droite, on retire 90 degrés pour pointer vers le haut
+        this.physics.velocityFromAngle(this.player.angle - 90, forwardSpeed, this.player.body.velocity);
     }
 
-    cleanupObstacles() {
-        this.obstacles.getChildren().forEach(obstacle => {
-            if (obstacle.y > this.scale.height + 100) {
-                obstacle.destroy();
-            }
-        });
+    checkBoundaries() {
+        // Condition de défaite : si la voiture sort trop loin de la vue de la caméra
+        const cameraBounds = this.cameras.main.getBounds();
+        if (!Phaser.Geom.Intersects.RectangleToRectangle(this.player.getBounds(), cameraBounds)) {
+            // Un petit délai pour éviter une défaite instantanée si on touche juste le bord
+            this.time.delayedCall(200, () => {
+                if (!Phaser.Geom.Intersects.RectangleToRectangle(this.player.getBounds(), this.cameras.main.getBounds())) {
+                    this.gameOver();
+                }
+            });
+        }
     }
 
     setupSocketListeners() {
         this.socket.on('start_turn', (data) => { if (this.isGameRunning) this.turning = data.direction; });
         this.socket.on('stop_turn', () => { this.turning = 'none'; });
-
-        // NOUVEAU : Redémarre la scène actuelle quand l'ordre est donné
-        this.socket.on('start_new_game', () => {
-            // scene.restart() relance les fonctions init() et create() de la scène
-            this.scene.restart();
-        });
+        this.socket.on('start_new_game', () => { this.scene.restart(); });
     }
 
     startCountdown() {
-        const countdownText = this.add.text(this.scale.width / 2, this.scale.height / 2, '3', { fontSize: '128px', fill: '#FFF', fontStyle: 'bold' }).setOrigin(0.5);
+        const countdownText = this.add.text(this.player.x, this.player.y, '3', { fontSize: '128px', fill: '#FFF', fontStyle: 'bold' }).setOrigin(0.5);
         let count = 3;
         const timerEvent = this.time.addEvent({
             delay: 1000,
@@ -185,12 +189,12 @@ class GameScene extends Phaser.Scene {
     }
 
     spawnObstaclesIfNeeded() {
-        if (this.obstacles.getLength() < 10 && Phaser.Math.Between(0, 100) > 90) { 
-            const padding = 20; 
-            const xPos = Phaser.Math.Between(this.roadBoundaries.left + padding, this.roadBoundaries.right - padding);
-            const obstacle = this.obstacles.create(xPos, -50, 'obstacle_texture');
-            this.physics.add.existing(obstacle, false);
-            obstacle.body.setImmovable(true);
+        const spawnDistance = 1200; // Apparaissent plus loin devant
+        if (this.obstacles.getLength() < 15) { 
+            const yPos = this.player.y - spawnDistance - (Math.random() * spawnDistance);
+            const xPos = this.player.x + Phaser.Math.Between(-this.scale.width, this.scale.width);
+            const obstacle = this.obstacles.create(xPos, yPos, 'obstacle_texture');
+            this.physics.add.existing(obstacle, true);
         }
     }
 
@@ -199,28 +203,25 @@ class GameScene extends Phaser.Scene {
         this.isGameRunning = false;
         this.physics.pause();
         
-        const finalScore = Math.floor(this.score);
+        const finalScore = this.score;
 
+        // On place les particules et le texte sur la position finale du joueur
         this.add.particles(this.player.x, this.player.y, 'particle_texture', {
             speed: 200, scale: { start: 1, end: 0 }, blendMode: 'ADD', lifespan: 600, quantity: 40
         });
+        this.add.text(this.player.x, this.player.y, 'GAME OVER', { fontSize: '64px', fill: '#ff0000', fontStyle: 'bold' }).setOrigin(0.5);
         
         this.player.destroy();
         
         this.socket.emit('game_over', { score: finalScore, sessionCode: this.sessionCode });
 
-        this.add.text(this.scale.width / 2, this.scale.height / 2, 'GAME OVER', { fontSize: '64px', fill: '#ff0000', fontStyle: 'bold' }).setOrigin(0.5);
-
-        // NOUVEAU : Déclenche le redémarrage automatique après 5 secondes
         this.time.delayedCall(5000, () => {
-            // S'assure que la scène n'a pas déjà été redémarrée manuellement
             if (this.scene.isActive()) {
                 this.socket.emit('request_replay', { sessionCode: this.sessionCode });
             }
         }, [], this);
     }
 }
-
 
 const config = {
     type: Phaser.AUTO,
