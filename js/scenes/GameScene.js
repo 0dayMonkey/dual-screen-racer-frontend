@@ -198,12 +198,41 @@ class GameScene extends Phaser.Scene {
     }
 
     setupSocketListeners() {
-        this.socket.on('start_turn', ({ playerId, direction }) => { if (this.players.has(playerId)) this.players.get(playerId).turning = direction; });
-        this.socket.on('stop_turn', ({ playerId }) => { if (this.players.has(playerId)) this.players.get(playerId).turning = 'none'; });
+        // Nettoyer les anciens écouteurs pour éviter les doublons lors du redémarrage d'une scène
+        this.socket.off('start_turn');
+        this.socket.off('stop_turn');
+        this.socket.off('steer');
+        this.socket.off('player_left');
+
+        // Pour le mode Flèches (on simule un angle cible)
+        this.socket.on('start_turn', ({ playerId, direction }) => {
+            if (this.players.has(playerId)) {
+                this.players.get(playerId).targetAngle = (direction === 'left' ? -45 : 45);
+            }
+        });
+
+        this.socket.on('stop_turn', ({ playerId }) => {
+            if (this.players.has(playerId)) {
+                this.players.get(playerId).targetAngle = 0;
+            }
+        });
+
+        // Pour le mode Volant
+        this.socket.on('steer', ({ playerId, angle }) => {
+            if (this.players.has(playerId)) {
+                // On met directement à jour l'angle cible avec la valeur du volant
+                this.players.get(playerId).targetAngle = angle;
+            }
+        });
+
+        // Gestion de la déconnexion d'un joueur en cours de partie
         this.socket.on('player_left', ({ playerId }) => {
             if (this.players.has(playerId)) {
+                // Détruire l'objet joueur
                 this.players.get(playerId).destroy();
                 this.players.delete(playerId);
+                
+                // Détruire son affichage de score
                 if (this.scoreDisplays.has(playerId)) {
                     this.scoreDisplays.get(playerId).destroy();
                     this.scoreDisplays.delete(playerId);
