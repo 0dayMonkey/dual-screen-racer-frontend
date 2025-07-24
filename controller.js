@@ -9,7 +9,6 @@ function main() {
     const connectionWrapper = document.getElementById('connection-wrapper');
     const controlsWrapper = document.getElementById('controls-wrapper');
     const gameOverWrapper = document.getElementById('game-over-wrapper');
-    
     const sessionCodeInput = document.getElementById('session-code-input');
     const connectButton = document.getElementById('connect-button');
     const leftButton = document.getElementById('left-button');
@@ -44,37 +43,22 @@ function main() {
     }
 
     function setupSocketEvents() {
-        socket.on('disconnect', () => {
-            setStatus('Déconnecté');
-            showView('connect');
-        });
+        socket.on('disconnect', () => { setStatus('Déconnecté'); showView('connect'); });
         socket.on('invalid_session', () => setStatus('Code de session invalide.'));
         socket.on('connection_successful', () => showView('controls'));
         socket.on('game_over', (data) => {
-            if (data && typeof data.score !== 'undefined') {
-                finalScoreText.textContent = data.score;
-            }
+            if (data && typeof data.score !== 'undefined') finalScoreText.textContent = data.score;
             showView('gameover');
         });
-
-        // NOUVEAU : Écoute l'ordre de redémarrage pour réinitialiser l'interface
-        socket.on('start_new_game', () => {
-            showView('controls');
-        });
+        socket.on('start_new_game', () => showView('controls'));
     }
 
     function startTurn(direction) {
-        if (socket && socket.connected && turningDirection !== direction) {
-            turningDirection = direction;
-            socket.emit('start_turn', { sessionCode, direction });
-        }
+        if (socket && socket.connected) socket.emit('start_turn', { sessionCode, direction });
     }
 
     function stopTurn() {
-        if (socket && socket.connected && turningDirection !== 'none') {
-            turningDirection = 'none';
-            socket.emit('stop_turn', { sessionCode });
-        }
+        if (socket && socket.connected) socket.emit('stop_turn', { sessionCode });
     }
     
     function connect() {
@@ -97,11 +81,8 @@ function main() {
         }
     }
     
-    // MODIFIÉ : Le bouton rejouer envoie un événement au serveur
     function requestReplay() {
-        if(socket && socket.connected) {
-            socket.emit('request_replay', { sessionCode });
-        }
+        if(socket && socket.connected) socket.emit('request_replay', { sessionCode });
     }
 
     function autoFillCode(code) {
@@ -119,20 +100,36 @@ function main() {
     }
 
     function checkForActiveSessions() {
+        setStatus('Recherche de session...');
         const tempSocket = io(serverUrl, socketOptions);
-        tempSocket.on('connect', () => {
-            tempSocket.emit('request_active_sessions');
-        });
+        let attempts = 0;
+        const maxAttempts = 5;
+
+        const pollingInterval = setInterval(() => {
+            if (tempSocket.connected) {
+                attempts++;
+                if (attempts > maxAttempts) {
+                    clearInterval(pollingInterval);
+                    tempSocket.disconnect();
+                    setStatus('Aucune session trouvée.');
+                    return;
+                }
+                tempSocket.emit('request_active_sessions');
+            }
+        }, 1000);
+
         tempSocket.on('active_session_found', (data) => {
             if (data && data.sessionCode) {
-                setStatus('Session de jeu détectée !');
+                clearInterval(pollingInterval);
+                setStatus('Session détectée !');
                 autoFillCode(data.sessionCode);
+                tempSocket.disconnect();
             }
-            tempSocket.disconnect();
         });
-        setTimeout(() => {
-            if (tempSocket.connected) tempSocket.disconnect();
-        }, 2000);
+
+        tempSocket.on('disconnect', () => {
+            clearInterval(pollingInterval);
+        });
     }
 
     function addEventListeners(element, startCallback, endCallback) {
@@ -147,10 +144,8 @@ function main() {
 
     addEventListeners(leftButton, () => startTurn('left'), stopTurn);
     addEventListeners(rightButton, () => startTurn('right'), stopTurn);
-    if (connectButton) connectButton.addEventListener('click', connect);
-    
-    // Le bouton "Rejouer" appelle maintenant la nouvelle fonction
-    if (restartButton) restartButton.addEventListener('click', requestReplay);
+    connectButton.addEventListener('click', connect);
+    restartButton.addEventListener('click', requestReplay);
     
     showView('connect');
     checkForActiveSessions();
