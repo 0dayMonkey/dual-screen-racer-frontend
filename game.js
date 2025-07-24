@@ -141,7 +141,6 @@ class GameScene extends Phaser.Scene {
      */
     cleanupObstacles() {
         this.obstacles.getChildren().forEach(obstacle => {
-            // Si un obstacle est bien derrière le joueur (plus bas que lui sur l'axe Y), on le supprime.
             if (obstacle.y > this.player.y + this.scale.height) {
                 obstacle.destroy();
             }
