@@ -17,6 +17,11 @@ class LobbyScene extends Phaser.Scene {
     }
 
     create() {
+        // **CORRECTION : La génération des textures est déplacée ici.**
+        // En créant les textures dans la première scène, elles sont disponibles
+        // pour toutes les scènes suivantes, y compris le lobby lui-même.
+        GraphicsGenerator.createAllTextures(this);
+
         if (!this.socket) {
             this.socket = io("https://miaou.vps.webdock.cloud", {
                 path: "/racer/socket.io/"
@@ -157,7 +162,10 @@ class GameScene extends Phaser.Scene {
     }
 
     create() {
-        GraphicsGenerator.createAllTextures(this);
+        // La génération des textures a été déplacée dans LobbyScene.
+        // Il n'est plus nécessaire de la rappeler ici.
+        // GraphicsGenerator.createAllTextures(this);
+
         this.road = this.add.tileSprite(this.scale.width / 2, this.scale.height / 2, this.scale.width, this.scale.height, 'road_texture');
 
         const worldHeight = 1000000;
@@ -204,7 +212,6 @@ class GameScene extends Phaser.Scene {
     update(time, delta) {
         if (!this.isGameRunning) return;
 
-        // On détermine quel joueur est en tête
         let leadPlayerY = 0;
         let leadPlayerSprite = null;
         this.players.forEach(player => {
@@ -215,16 +222,11 @@ class GameScene extends Phaser.Scene {
             }
         });
 
-        // S'il n'y a pas de joueur en tête (par ex. au début), on arrête
         if (!leadPlayerSprite) return;
 
-        // **CORRECTION DE LA RÉGRESSION**
-        // La position de la route et le défilement de sa texture
-        // sont maintenant basés sur la position du joueur en tête.
         this.road.tilePositionY = leadPlayerSprite.y;
         this.road.y = leadPlayerSprite.y;
 
-        // Calcul du score basé sur le meilleur score parmi les joueurs
         let leadScore = 0;
         this.players.forEach(player => {
             player.score = Math.max(0, Math.floor(-player.sprite.y / 10));
