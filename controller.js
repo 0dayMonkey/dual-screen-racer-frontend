@@ -1,8 +1,6 @@
 function main() {
     const serverUrl = "https://miaou.vps.webdock.cloud";
-    const socketOptions = {
-        path: "/racer/socket.io/"
-    };
+    const socketOptions = { path: "/racer/socket.io/" };
     let socket = null;
     let sessionCode = '';
     let turningDirection = 'none';
@@ -20,9 +18,7 @@ function main() {
     const restartButton = document.getElementById('restart-button');
 
     function setStatus(message) {
-        if (statusDiv) {
-            statusDiv.textContent = message;
-        }
+        if (statusDiv) statusDiv.textContent = message;
     }
     
     function showView(viewName) {
@@ -30,20 +26,24 @@ function main() {
         controlsWrapper.classList.add('hidden');
         gameOverWrapper.classList.add('hidden');
         
-        if (viewName === 'connect') {
-            connectionWrapper.classList.remove('hidden');
-            setStatus('En attente...');
-        } else if (viewName === 'controls') {
-            controlsWrapper.classList.remove('hidden');
-            setStatus(`Connecté à la session ${sessionCode}`);
-        } else if (viewName === 'gameover') {
-            gameOverWrapper.classList.remove('hidden');
-            setStatus('Partie terminée !');
+        const viewMap = {
+            'connect': connectionWrapper,
+            'controls': controlsWrapper,
+            'gameover': gameOverWrapper
+        };
+        if (viewMap[viewName]) {
+            viewMap[viewName].classList.remove('hidden');
         }
+
+        const statusMap = {
+            'connect': 'En attente...',
+            'controls': `Connecté à la session ${sessionCode}`,
+            'gameover': 'Partie terminée !'
+        };
+        setStatus(statusMap[viewName] || 'En attente...');
     }
 
     function setupSocketEvents() {
-        socket.on('connect', () => setStatus('Connecté au serveur'));
         socket.on('disconnect', () => {
             setStatus('Déconnecté');
             showView('connect');
@@ -80,11 +80,51 @@ function main() {
         }
         
         setStatus('Tentative de connexion...');
-        socket = io(serverUrl, socketOptions);
-        setupSocketEvents();
-        socket.on('connect', () => {
-             socket.emit('join_session', { sessionCode });
+        if (socket && socket.connected) {
+            socket.emit('join_session', { sessionCode });
+        } else {
+            socket = io(serverUrl, socketOptions);
+            setupSocketEvents();
+            socket.on('connect', () => {
+                 setStatus('Connecté au serveur');
+                 socket.emit('join_session', { sessionCode });
+            });
+        }
+    }
+
+    // Nouvelle fonction pour l'auto-remplissage
+    function autoFillCode(code) {
+        let i = 0;
+        sessionCodeInput.value = '';
+        const interval = setInterval(() => {
+            if (i < code.length) {
+                sessionCodeInput.value += code[i];
+                i++;
+            } else {
+                clearInterval(interval);
+                // Tenter la connexion automatiquement après remplissage
+                connect();
+            }
+        }, 100); // Délai de 0.1s entre chaque chiffre
+    }
+
+    // Détection de session au chargement
+    function checkForActiveSessions() {
+        const tempSocket = io(serverUrl, socketOptions);
+        tempSocket.on('connect', () => {
+            tempSocket.emit('request_active_sessions');
         });
+        tempSocket.on('active_session_found', (data) => {
+            if (data && data.sessionCode) {
+                setStatus('Session de jeu détectée !');
+                autoFillCode(data.sessionCode);
+            }
+            tempSocket.disconnect();
+        });
+        // Si aucune session n'est trouvée après un court délai, on ne fait rien
+        setTimeout(() => {
+            if (tempSocket.connected) tempSocket.disconnect();
+        }, 2000);
     }
     
     function restartPage() {
@@ -103,15 +143,11 @@ function main() {
 
     addEventListeners(leftButton, () => startTurn('left'), stopTurn);
     addEventListeners(rightButton, () => startTurn('right'), stopTurn);
-
-    if (connectButton) {
-        connectButton.addEventListener('click', connect);
-    }
-    if (restartButton) {
-        restartButton.addEventListener('click', restartPage);
-    }
+    if (connectButton) connectButton.addEventListener('click', connect);
+    if (restartButton) restartButton.addEventListener('click', restartPage);
     
     showView('connect');
+    checkForActiveSessions(); // Lancement de la détection
 }
 
 main();

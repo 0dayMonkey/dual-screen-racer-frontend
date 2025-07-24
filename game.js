@@ -74,6 +74,9 @@ class GameScene extends Phaser.Scene {
         this.roadWidth = 400;
         this.roadLeftBoundary = 0;
         this.roadRightBoundary = 0;
+
+        this.scrollSpeed = 300;
+        this.score = 0;
     }
 
     init(data) {
@@ -89,43 +92,33 @@ class GameScene extends Phaser.Scene {
         this.roadRightBoundary = this.roadLeftBoundary + this.roadWidth;
 
         this.player = this.physics.add.sprite(400, 500, 'car_texture');
+        this.player.setCollideWorldBounds(false); // Le joueur peut sortir de l'écran
 
-        this.player.setMaxVelocity(600); 
-
-        this.cameras.main.startFollow(this.player, true, 0.08, 0.08);
-        this.cameras.main.setZoom(1.1);
-        
         this.obstacles = this.physics.add.group({ immovable: true });
-        this.physics.add.collider(this.player, this.obstacles);
+        this.physics.add.collider(this.player, this.obstacles, () => this.gameOver());
 
-        this.scoreText = this.add.text(16, 16, 'Score: 0', { fontSize: '24px', fill: '#FFF', fontStyle: 'bold' }).setScrollFactor(0);
+        this.score = 0;
+        this.scoreText = this.add.text(16, 16, 'Score: 0', { fontSize: '24px', fill: '#FFF', fontStyle: 'bold' });
 
         this.setupSocketListeners();
         this.startCountdown();
     }
 
-update(time, delta) {
-        if (!this.isGameRunning) {
-            return;
-        }
+    update(time, delta) {
+        if (!this.isGameRunning) return;
 
-        // --- All active game logic happens below ---
-        
-        this.updatePlayerMovement();
-        
+        // La route défile à une vitesse constante
+        this.road.tilePositionY -= this.scrollSpeed * (delta / 1000);
+
+        // Les obstacles bougent vers le bas avec la route
+        this.obstacles.incY(this.scrollSpeed * (delta / 1000));
+
+        this.updatePlayerMovement(delta);
         this.checkBoundaries(); 
-        
-        // This check prevents the crash. If gameOver() was called, the player is gone
-        // and we should not continue the update loop. The 'active' property is a reliable
-        // way to check if a game object has been destroyed.
-        if (!this.player.active) {
-            return;
-        }
-        
-        // This code will now only run if the player exists
-        this.road.tilePositionY = this.player.y;
 
-        this.scoreText.setText('Score: ' + Math.max(0, Math.floor(-this.player.y / 10)));
+        // Le score augmente avec le temps
+        this.score += delta / 100;
+        this.scoreText.setText('Score: ' + Math.floor(this.score));
         
         this.spawnObstaclesIfNeeded();
         this.cleanupObstacles();
@@ -166,9 +159,8 @@ update(time, delta) {
     }
     
     cleanupObstacles() {
-        const cameraTop = this.cameras.main.scrollY;
         this.obstacles.getChildren().forEach(obstacle => {
-            if (obstacle.y > cameraTop + this.cameras.main.height + 500) {
+            if (obstacle.y > 650) { // Si l'obstacle est sorti par le bas
                 obstacle.destroy();
             }
         });
@@ -176,13 +168,9 @@ update(time, delta) {
 
     setupSocketListeners() {
         this.socket.on('start_turn', (data) => {
-            if (this.isGameRunning && data && data.direction) {
-                this.turning = data.direction;
-            }
+            if (this.isGameRunning && data && data.direction) this.turning = data.direction;
         });
-        this.socket.on('stop_turn', () => {
-            this.turning = 'none';
-        });
+        this.socket.on('stop_turn', () => { this.turning = 'none'; });
     }
 
     startCountdown() {
@@ -211,39 +199,31 @@ update(time, delta) {
     }
 
     spawnObstaclesIfNeeded() {
-        const spawnDistance = 1000; 
-        
-        while (this.obstacles.getLength() < 7) { 
-            const yPos = this.player.y - spawnDistance - (Math.random() * spawnDistance);
-            
+        if (this.obstacles.getLength() < 7 && Phaser.Math.Between(0, 100) > 95) { 
             const padding = 20; 
             const xPos = Phaser.Math.Between(this.roadLeftBoundary + padding, this.roadRightBoundary - padding);
-
-            const obstacle = this.obstacles.create(xPos, yPos, 'obstacle_texture');
+            const obstacle = this.obstacles.create(xPos, -50, 'obstacle_texture');
             obstacle.setImmovable(true);
         }
     }
 
-    gameOver() {
+     gameOver() {
         if (!this.isGameRunning) return;
         this.isGameRunning = false;
         this.physics.pause();
         
-        const finalScore = Math.max(0, Math.floor(-this.player.y / 10));
+        const finalScore = Math.floor(this.score);
 
         const particles = this.add.particles(0, 0, 'particle_texture', {
-            speed: 200,
-            scale: { start: 1, end: 0 },
-            blendMode: 'ADD',
-            lifespan: 600
+            speed: 200, scale: { start: 1, end: 0 }, blendMode: 'ADD', lifespan: 600
         });
         particles.createEmitter().explode(32, this.player.x, this.player.y);
         
         this.player.destroy();
         
-        this.socket.emit('game_over', { score: finalScore });
+        this.socket.emit('game_over', { score: finalScore, sessionCode: this.socket.id });
 
-        this.add.text(this.cameras.main.centerX, this.cameras.main.centerY, 'GAME OVER', { fontSize: '64px', fill: '#ff0000', fontStyle: 'bold' }).setOrigin(0.5).setScrollFactor(0);
+        this.add.text(400, 300, 'GAME OVER', { fontSize: '64px', fill: '#ff0000', fontStyle: 'bold' }).setOrigin(0.5);
     }
 }
 
