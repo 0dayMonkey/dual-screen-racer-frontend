@@ -20,7 +20,27 @@ class Player extends Phaser.Physics.Arcade.Sprite {
     }
 
     updateMovement() {
-        const forwardSpeed = 500;
+        // --- DEBUT DE LA MODIFICATION ---
+
+        const forwardSpeed = 500; // Vitesse sur la route
+        const grassSpeed = 250;   // Vitesse sur l'herbe (plus lente)
+        let currentSpeed;
+
+        // Définir les limites de la route
+        // La route fait 70% de la largeur, centrée.
+        // L'herbe est donc sur les 15% de chaque côté.
+        const roadLeftBoundary = this.scene.scale.width * 0.15;
+        const roadRightBoundary = this.scene.scale.width * 0.85;
+
+        // Vérifier si la voiture est sur l'herbe
+        if (this.x < roadLeftBoundary || this.x > roadRightBoundary) {
+            currentSpeed = grassSpeed;
+            // Optionnel : faire vibrer légèrement la voiture sur l'herbe
+            this.x += Math.random() * 2 - 1; 
+        } else {
+            currentSpeed = forwardSpeed;
+        }
+
         const turnStrength = 3;   
         const maxAngle = 40;      
         const straighteningFactor = 0.05; 
@@ -37,6 +57,9 @@ class Player extends Phaser.Physics.Arcade.Sprite {
             this.angle *= (1 - straighteningFactor);
         }
 
-        this.scene.physics.velocityFromAngle(this.angle - 90, forwardSpeed, this.body.velocity);
+        // On utilise la vitesse déterminée (currentSpeed)
+        this.scene.physics.velocityFromAngle(this.angle - 90, currentSpeed, this.body.velocity);
+
+        // --- FIN DE LA MODIFICATION ---
     }
 }

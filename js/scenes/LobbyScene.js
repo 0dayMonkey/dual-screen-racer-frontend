@@ -21,13 +21,12 @@ class LobbyScene extends Phaser.Scene {
             this.setupSocketEvents();
             this.socket.emit('create_session');
         } else {
-            this.setupSocketEvents(); // Assurez-vous que les écouteurs sont réactivés
+            this.setupSocketEvents(); 
             this.redrawLobbyState();
         }
     }
 
     setupSocketEvents() {
-        // Nettoyer les anciens écouteurs pour éviter les doublons
         this.socket.off('session_created');
         this.socket.off('player_joined');
         this.socket.off('player_status_updated');
@@ -36,7 +35,6 @@ class LobbyScene extends Phaser.Scene {
         this.socket.off('start_game_for_all');
         this.socket.off('return_to_lobby');
 
-        // Configurer les nouveaux écouteurs
         this.socket.on('session_created', (data) => {
             this.sessionCode = data.sessionCode;
             this.redrawLobbyState();
@@ -95,7 +93,7 @@ class LobbyScene extends Phaser.Scene {
         
         car.setAngle(90);
         car.x = -100;
-        nameText.x = -100; // Aligner le pseudo avec la voiture pour l'animation
+        nameText.x = -100; 
         
         this.tweens.add({ targets: [car, nameText], x: this.scale.width / 2 - 50, ease: 'Cubic.easeOut', duration: 1200 });
     }
