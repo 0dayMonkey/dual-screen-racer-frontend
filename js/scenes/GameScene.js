@@ -5,8 +5,6 @@ class GameScene extends Phaser.Scene {
         this.isGameRunning = false;
         this.highestScore = 0; 
         this.finalScores = [];
-        // MODIFICATION : Vitesse de défilement de la caméra (en pixels par seconde)
-        this.cameraSpeed = 445; 
     }
 
     init(data) {
@@ -31,7 +29,6 @@ class GameScene extends Phaser.Scene {
             this.players.set(playerData.id, player);
         });
         
-        // On retire startFollow d'ici, la caméra sera gérée manuellement dans update()
         this.cameras.main.setZoom(1.2);
 
         this.physics.add.collider(Array.from(this.players.values()), this.obstacleManager.getGroup(), this.playerHitObstacle, null, this);
@@ -50,13 +47,9 @@ class GameScene extends Phaser.Scene {
     update(time, delta) {
         if (!this.isGameRunning) return;
 
-        // 1. La caméra avance verticalement à une vitesse constante
-        this.cameras.main.scrollY -= (this.cameraSpeed * delta) / 1000;
-
         let leadPlayer = null;
         let leadPlayerY = Number.MAX_VALUE;
 
-        // On met à jour les joueurs et on trouve le leader
         this.players.forEach(player => {
             player.updateMovement(delta);
             if (player.y < leadPlayerY) {
@@ -65,22 +58,29 @@ class GameScene extends Phaser.Scene {
             }
         });
         
-        // 2. La caméra suit le leader horizontalement de manière douce
-        if (leadPlayer) {
-            const targetX = leadPlayer.x - this.cameras.main.width / 2;
-            this.cameras.main.scrollX = Phaser.Math.Interpolation.Linear([this.cameras.main.scrollX, targetX], 0.05);
-        }
-        
-        // MODIFICATION : Correction de la position de la route
-        // La route reste toujours centrée sur la caméra.
-        this.road.y = this.cameras.main.worldView.centerY;
-        // Le défilement de la texture est géré séparément pour donner l'illusion de mouvement.
-        this.road.tilePositionY = this.cameras.main.scrollY;
-        
         if (!leadPlayer) {
             if (this.isGameRunning) this.endGame();
             return;
         }
+
+        // --- NOUVELLE LOGIQUE DE CAMÉRA HYBRIDE ---
+        // 1. Définir une position cible pour la caméra, basée sur le leader.
+        // Le joueur en tête sera positionné à 80% du bas de l'écran.
+        const targetY = leadPlayer.y - this.scale.height * 0.8;
+
+        // 2. S'assurer que la caméra ne recule JAMAIS.
+        const newScrollY = Math.min(this.cameras.main.scrollY, targetY);
+
+        // 3. Déplacer la caméra verticalement de manière fluide vers sa nouvelle cible.
+        this.cameras.main.scrollY = Phaser.Math.Interpolation.Linear([this.cameras.main.scrollY, newScrollY], 0.05);
+
+        // 4. Le suivi horizontal reste le même pour suivre les virages du leader.
+        const targetX = leadPlayer.x - this.cameras.main.width / 2;
+        this.cameras.main.scrollX = Phaser.Math.Interpolation.Linear([this.cameras.main.scrollX, targetX], 0.05);
+        // --- FIN DE LA LOGIQUE DE CAMÉRA ---
+
+        this.road.y = this.cameras.main.worldView.centerY;
+        this.road.tilePositionY = this.cameras.main.scrollY;
         
         this.obstacleManager.update(leadPlayer);
         
@@ -172,6 +172,8 @@ class GameScene extends Phaser.Scene {
         this.socket.on('start_turn', ({ playerId, direction }) => { if (this.players.has(playerId)) this.players.get(playerId).turning = direction; });
         this.socket.on('stop_turn', ({ playerId }) => { if (this.players.has(playerId)) this.players.get(playerId).turning = 'none'; });
     }
+
+
 
     startCountdown() {
         const countdownText = this.add.text(this.scale.width / 2, this.scale.height / 2, '3', { fontSize: '128px', fill: '#FFF' }).setOrigin(0.5).setScrollFactor(0);
