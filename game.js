@@ -109,16 +109,16 @@ class GameScene extends Phaser.Scene {
         if (!this.isGameRunning) return;
 
         this.updatePlayerMovement();
-        
-        // Le nom de la fonction est plus clair
         this.checkBoundaries(); 
-
+        
         // Le défilement de la route est maintenant lié à la position Y du joueur
         this.road.tilePositionY = this.player.y;
 
         this.scoreText.setText('Score: ' + Math.max(0, Math.floor(-this.player.y / 10)));
         
+        // Appel des deux nouvelles fonctions
         this.spawnObstaclesIfNeeded();
+        this.cleanupObstacles(); // <-- AJOUTER CETTE LIGNE
     }
 
     updatePlayerMovement() {
@@ -149,6 +149,17 @@ class GameScene extends Phaser.Scene {
 
         // 4. Toujours avancer dans la direction où la voiture pointe
         this.physics.velocityFromAngle(this.player.angle - 90, forwardSpeed, this.player.body.velocity);
+    }
+    
+
+    cleanupObstacles() {
+        const cameraTop = this.cameras.main.scrollY;
+        this.obstacles.getChildren().forEach(obstacle => {
+            // Si un obstacle est 500px en dessous de ce que la caméra voit, on le supprime
+            if (obstacle.y > cameraTop + this.cameras.main.height + 500) {
+                obstacle.destroy();
+            }
+        });
     }
     
     checkBoundaries() {
@@ -201,10 +212,19 @@ class GameScene extends Phaser.Scene {
     }
 
     spawnObstaclesIfNeeded() {
-        const spawnDistance = 1000; // Distance à laquelle les obstacles apparaissent devant le joueur
-        while (this.obstacles.getLength() < 15) { // Maintenir un certain nombre d'obstacles dans le monde
+        // Distance à laquelle les obstacles apparaissent devant le joueur
+        const spawnDistance = 1000; 
+        
+        // On maintient un maximum de 7 obstacles dans le monde au lieu de 15
+        while (this.obstacles.getLength() < 7) { 
+            // Position en Y, loin devant le joueur
             const yPos = this.player.y - spawnDistance - (Math.random() * spawnDistance);
-            const xPos = Phaser.Math.Between(100, 700);
+            
+            // Position en X, calculée pour être DANS les limites de la route
+            // On ajoute un petit padding pour ne pas apparaître collé au bord
+            const padding = 20; 
+            const xPos = Phaser.Math.Between(this.roadLeftBoundary + padding, this.roadRightBoundary - padding);
+
             const obstacle = this.obstacles.create(xPos, yPos, 'obstacle_texture');
             obstacle.setImmovable(true);
         }
