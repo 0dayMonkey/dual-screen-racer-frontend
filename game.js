@@ -5,7 +5,7 @@ class LobbyScene extends Phaser.Scene {
         this.sessionCodeText = null;
         this.sessionCode = null;
     }
-
+    // stable
     create() {
         this.initializeText();
         this.initializeSocketConnection();
