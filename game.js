@@ -104,12 +104,25 @@ class GameScene extends Phaser.Scene {
         this.startCountdown();
     }
 
-    update(time, delta) {
-        if (!this.isGameRunning) return;
+update(time, delta) {
+        if (!this.isGameRunning) {
+            return;
+        }
 
+        // --- All active game logic happens below ---
+        
         this.updatePlayerMovement();
+        
         this.checkBoundaries(); 
         
+        // This check prevents the crash. If gameOver() was called, the player is gone
+        // and we should not continue the update loop. The 'active' property is a reliable
+        // way to check if a game object has been destroyed.
+        if (!this.player.active) {
+            return;
+        }
+        
+        // This code will now only run if the player exists
         this.road.tilePositionY = this.player.y;
 
         this.scoreText.setText('Score: ' + Math.max(0, Math.floor(-this.player.y / 10)));
