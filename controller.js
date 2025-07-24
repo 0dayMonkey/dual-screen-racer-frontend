@@ -3,14 +3,16 @@ function main() {
     const socketOptions = { path: "/racer/socket.io/" };
     let socket = null;
     let sessionCode = '';
-    let turningDirection = 'none';
 
     const statusDiv = document.getElementById('status');
     const connectionWrapper = document.getElementById('connection-wrapper');
+    const lobbyWrapper = document.getElementById('lobby-wrapper'); // NOUVEAU
     const controlsWrapper = document.getElementById('controls-wrapper');
     const gameOverWrapper = document.getElementById('game-over-wrapper');
+
     const sessionCodeInput = document.getElementById('session-code-input');
     const connectButton = document.getElementById('connect-button');
+    const readyButton = document.getElementById('ready-button'); // NOUVEAU
     const leftButton = document.getElementById('left-button');
     const rightButton = document.getElementById('right-button');
     const finalScoreText = document.getElementById('final-score');
@@ -22,11 +24,13 @@ function main() {
     
     function showView(viewName) {
         connectionWrapper.classList.add('hidden');
+        lobbyWrapper.classList.add('hidden'); // NOUVEAU
         controlsWrapper.classList.add('hidden');
         gameOverWrapper.classList.add('hidden');
         
         const viewMap = {
             'connect': connectionWrapper,
+            'lobby': lobbyWrapper, // NOUVEAU
             'controls': controlsWrapper,
             'gameover': gameOverWrapper
         };
@@ -36,21 +40,43 @@ function main() {
 
         const statusMap = {
             'connect': 'En attente...',
-            'controls': `Connecté à la session ${sessionCode}`,
+            'lobby': `Connecté à la session ${sessionCode}. En attente des joueurs...`,
+            'controls': `Partie en cours dans la session ${sessionCode}`,
             'gameover': 'Partie terminée !'
         };
         setStatus(statusMap[viewName] || 'En attente...');
     }
 
     function setupSocketEvents() {
-        socket.on('disconnect', () => { setStatus('Déconnecté'); showView('connect'); });
-        socket.on('invalid_session', () => setStatus('Code de session invalide.'));
-        socket.on('connection_successful', () => showView('controls'));
+        socket.on('disconnect', () => { setStatus('Déconnecté du serveur.'); showView('connect'); });
+        socket.on('invalid_session', () => setStatus('Code de session invalide ou partie déjà commencée.'));
+        socket.on('session_closed', () => { setStatus('La session de jeu a été fermée par l\'hôte.'); showView('connect'); socket.disconnect(); });
+
+        // CHANGEMENT : 'connection_successful' est remplacé par 'lobby_joined'
+        socket.on('lobby_joined', (data) => {
+            // Réactive le bouton "Prêt" pour une nouvelle partie
+            readyButton.disabled = false;
+            readyButton.textContent = "Prêt";
+            showView('lobby');
+        });
+
+        // NOUVEAU : Le serveur confirme le lancement du jeu pour tous.
+        socket.on('start_game_for_all', () => {
+            showView('controls');
+        });
+
+        // NOUVEAU : Gère le retour au lobby pour une nouvelle partie.
+        socket.on('return_to_lobby', () => {
+             // Réactive le bouton "Prêt" et affiche le lobby
+            readyButton.disabled = false;
+            readyButton.textContent = "Prêt";
+            showView('lobby');
+        });
+
         socket.on('game_over', (data) => {
             if (data && typeof data.score !== 'undefined') finalScoreText.textContent = data.score;
             showView('gameover');
         });
-        socket.on('start_new_game', () => showView('controls'));
     }
 
     function startTurn(direction) {
@@ -73,19 +99,28 @@ function main() {
             socket = io(serverUrl, socketOptions);
             setupSocketEvents();
             socket.on('connect', () => {
-                 setStatus('Connecté au serveur');
+                 setStatus('Connecté au serveur. Envoi du code de session...');
                  socket.emit('join_session', { sessionCode });
             });
         } else {
             socket.emit('join_session', { sessionCode });
         }
     }
+
+    // NOUVELLE FONCTION : Le joueur signale qu'il est prêt.
+    function signalReady() {
+        if (socket && socket.connected) {
+            socket.emit('player_ready', { sessionCode });
+            readyButton.textContent = "En attente...";
+            readyButton.disabled = true; // Empêche les clics multiples
+        }
+    }
     
     function requestReplay() {
         if(socket && socket.connected) socket.emit('request_replay', { sessionCode });
     }
-
-    function autoFillCode(code) {
+    
+function autoFillCode(code) {
         let i = 0;
         sessionCodeInput.value = '';
         const interval = setInterval(() => {
@@ -142,9 +177,11 @@ function main() {
         }
     }
 
+
     addEventListeners(leftButton, () => startTurn('left'), stopTurn);
     addEventListeners(rightButton, () => startTurn('right'), stopTurn);
     connectButton.addEventListener('click', connect);
+    readyButton.addEventListener('click', signalReady); // NOUVEAU
     restartButton.addEventListener('click', requestReplay);
     
     showView('connect');
@@ -152,3 +189,5 @@ function main() {
 }
 
 main();
+
+    
