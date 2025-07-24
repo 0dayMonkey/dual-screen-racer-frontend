@@ -29,10 +29,10 @@ class GameScene extends Phaser.Scene {
             this.players.set(playerData.id, player);
         });
         
-        this.cameras.main.setZoom(1.2);
-
         this.physics.add.collider(Array.from(this.players.values()), this.obstacleManager.getGroup(), this.playerHitObstacle, null, this);
         this.scoreText = this.add.text(16, 16, 'Score: 0', { fontSize: '24px', fill: '#FFF', fontStyle: 'bold' }).setScrollFactor(0);
+        
+        // On s'assure que toutes les fonctions nécessaires sont présentes et appelées
         this.setupSocketListeners();
         this.startCountdown();
     }
@@ -47,7 +47,6 @@ class GameScene extends Phaser.Scene {
     update(time, delta) {
         if (!this.isGameRunning) return;
 
-        // Si il n'y a plus de joueurs, on arrête tout
         if (this.players.size === 0) {
             if (this.isGameRunning) this.endGame();
             return;
@@ -55,45 +54,32 @@ class GameScene extends Phaser.Scene {
 
         let leadPlayer = null;
         let leadPlayerY = Number.MAX_VALUE;
-        
-        // MODIFICATION : Variables pour calculer l'écart entre les joueurs
         let minX = Number.MAX_VALUE;
         let maxX = Number.MIN_VALUE;
 
         this.players.forEach(player => {
             player.updateMovement(delta);
-            // On cherche le joueur le plus haut (leader)
             if (player.y < leadPlayerY) {
                 leadPlayerY = player.y;
                 leadPlayer = player;
             }
-            // On cherche les positions extrêmes horizontales
             minX = Math.min(minX, player.x);
             maxX = Math.max(maxX, player.x);
         });
-        
-        // --- NOUVELLE LOGIQUE DE CAMÉRA DYNAMIQUE ---
 
-        // 1. Calcul du zoom nécessaire
+        // Logique de caméra dynamique avec zoom et centrage sur le groupe
         const playerSpread = maxX - minX;
-        const padding = this.scale.width * 0.4; // Marge de 40% pour que ce ne soit pas collé aux bords
-        const targetZoom = Phaser.Math.Clamp(this.scale.width / (playerSpread + padding), 0.6, 1.2); // On limite le zoom min/max
-
-        // On applique le zoom de manière fluide
+        const padding = this.scale.width * 0.4;
+        const targetZoom = Phaser.Math.Clamp(this.scale.width / (playerSpread + padding), 0.6, 1.2);
         this.cameras.main.setZoom(Phaser.Math.Interpolation.Linear([this.cameras.main.zoom, targetZoom], 0.05));
 
-        // 2. Calcul du centrage horizontal
-        // On centre la caméra sur le milieu du groupe de joueurs
         const groupCenterX = (minX + maxX) / 2;
         const targetX = groupCenterX - this.cameras.main.width / 2;
         this.cameras.main.scrollX = Phaser.Math.Interpolation.Linear([this.cameras.main.scrollX, targetX], 0.05);
 
-        // 3. Le suivi vertical du leader reste le même
         const targetY = leadPlayer.y - this.scale.height * 0.8;
         const newScrollY = Math.min(this.cameras.main.scrollY, targetY);
         this.cameras.main.scrollY = Phaser.Math.Interpolation.Linear([this.cameras.main.scrollY, newScrollY], 0.05);
-
-        // --- FIN DE LA LOGIQUE DE CAMÉRA ---
 
         this.road.y = this.cameras.main.worldView.centerY;
         this.road.tilePositionY = this.cameras.main.scrollY;
@@ -115,31 +101,23 @@ class GameScene extends Phaser.Scene {
     checkPlayerElimination() {
         const cameraBounds = this.cameras.main.worldView;
         const playersToEliminate = [];
-        const eliminationDelay = 2000; // Délai de 2 secondes en millisecondes
+        const eliminationDelay = 2000;
 
         this.players.forEach(player => {
-            // Si le joueur est hors de l'écran (en bas)
             if (player.y > cameraBounds.bottom + 50) {
-                // Si c'est la première fois, on démarre le minuteur
                 if (player.offScreenSince === null) {
                     player.offScreenSince = this.time.now;
                 }
-
-                // On donne un retour visuel : la voiture devient semi-transparente
                 player.setAlpha(0.5);
-
-                // On vérifie si le délai de 2 secondes est écoulé
                 if (this.time.now - player.offScreenSince > eliminationDelay) {
                     playersToEliminate.push(player.playerId);
                 }
             } else {
-                // Si le joueur est revenu à l'écran, on réinitialise son minuteur et sa visibilité
                 player.offScreenSince = null;
                 player.setAlpha(1);
             }
         });
 
-        // Cette partie reste inchangée : on supprime les joueurs marqués pour élimination
         playersToEliminate.forEach(playerId => {
             if (this.players.has(playerId)) {
                 const player = this.players.get(playerId);
@@ -161,7 +139,7 @@ class GameScene extends Phaser.Scene {
         this.isGameRunning = false;
         
         this.physics.pause();
-        // La caméra est déjà indépendante, pas besoin de stopFollow
+        this.cameras.main.stopFollow();
 
         this.players.forEach(player => {
             this.finalScores.push({ id: player.playerId, score: player.score });
@@ -169,7 +147,7 @@ class GameScene extends Phaser.Scene {
         });
         this.players.clear();
 
-        const rect = this.add.rectangle(this.cameras.main.centerX, this.cameras.main.centerY, 400, 300, 0x000000, 0.7).setScrollFactor(0);
+        const rect = this.add.rectangle(this.cameras.main.worldView.centerX, this.cameras.main.worldView.centerY, 400, 300, 0x000000, 0.7).setScrollFactor(0);
         const title = this.add.text(rect.x, rect.y - 120, 'Scores Finaux', { fontSize: '32px', fill: '#fff' }).setOrigin(0.5).setScrollFactor(0);
         this.finalScores.sort((a, b) => b.score - a.score);
 
@@ -189,8 +167,6 @@ class GameScene extends Phaser.Scene {
         this.socket.on('stop_turn', ({ playerId }) => { if (this.players.has(playerId)) this.players.get(playerId).turning = 'none'; });
     }
 
-
-
     startCountdown() {
         const countdownText = this.add.text(this.scale.width / 2, this.scale.height / 2, '3', { fontSize: '128px', fill: '#FFF' }).setOrigin(0.5).setScrollFactor(0);
         let count = 3;
@@ -202,6 +178,7 @@ class GameScene extends Phaser.Scene {
                 else if (count === 0) countdownText.setText('GO!');
                 else {
                     countdownText.destroy();
+                    // C'est cette ligne qui démarre le jeu.
                     this.isGameRunning = true;
                 }
             },
