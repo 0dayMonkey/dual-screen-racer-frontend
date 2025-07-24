@@ -68,7 +68,6 @@ constructor() {
             maxX = Math.max(maxX, player.x);
         });
 
-        // --- NOUVELLE LOGIQUE DE CAMÉRA CONDITIONNELLE ---
         
         // S'il y a plus d'un joueur, on utilise le zoom dynamique
         if (this.players.size > 1) {
