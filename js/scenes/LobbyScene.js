@@ -112,33 +112,33 @@ class LobbyScene extends Phaser.Scene {
         
         this.initialPlayers.forEach(player => this.addPlayerToLobby(player));
     }
-
+    
+    // --- FONCTION CORRIGÉE ---
     generateAndDisplayQRCode() {
         const url = `https://harib-naim.fr/racer/controller.html?sessionCode=${this.sessionCode}`;
-        const tempCanvas = document.createElement('canvas');
-        
-        const qr = new QRious({
-            element: tempCanvas,
-            value: url,
-            size: 256,
-            background: 'white',
-            foreground: 'black'
-        });
-
-        const qrDataURL = tempCanvas.toDataURL();
         const textureKey = `qr_${this.sessionCode}`;
 
         if (this.textures.exists(textureKey)) {
-            this.textures.remove(textureKey);
+            if (this.qrCodeImage) this.qrCodeImage.destroy();
+            this.qrCodeImage = this.add.image(this.scale.width / 2, 220, textureKey).setScale(0.6);
+            return;
         }
 
+        const tempCanvas = document.createElement('canvas');
+        new QRious({
+            element: tempCanvas,
+            value: url,
+            size: 256
+        });
+        
+        const qrDataURL = tempCanvas.toDataURL();
+        
         this.textures.addBase64(textureKey, qrDataURL);
-        this.textures.once('addtexture', () => {
-            if (this.qrCodeImage) {
-                this.qrCodeImage.destroy();
-            }
+        
+        this.textures.once(`addtexture-${textureKey}`, () => {
+            if (this.qrCodeImage) this.qrCodeImage.destroy();
             this.qrCodeImage = this.add.image(this.scale.width / 2, 220, textureKey).setScale(0.6);
-        }, this);
+        });
     }
 
 
