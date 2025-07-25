@@ -33,7 +33,6 @@ function main() {
     const steeringWheel = document.getElementById('steering-wheel');
     const wheelHandle = document.getElementById('wheel-handle');
 
-
     function setStatus(message) {
         if (statusDiv) statusDiv.textContent = message;
     }
@@ -249,7 +248,6 @@ function main() {
         socket.emit('stop_turn', { sessionCode });
     }
     
-    // FIX: Logique de rotation du volant simplifiée et corrigée
     function handleWheelMove(event) {
         if (!isDraggingWheel) return;
         event.preventDefault();
@@ -264,14 +262,10 @@ function main() {
         const deltaX = clientX - centerX;
         const deltaY = clientY - centerY;
 
-        // Calcul de l'angle basé sur la position du toucher (atan2)
-        // L'angle 0 est à droite, on ajoute +90 pour que 0 soit en bas, et on inverse pour que le haut soit 0.
         let angle = Math.atan2(deltaY, deltaX) * (180 / Math.PI) - 90;
 
-        // On fait tourner la poignée (le point bleu) pour suivre le doigt
-        wheelHandle.style.transform = `rotate(${angle}deg) translateY(-65px)`; // 65px = distance du centre
+        wheelHandle.style.transform = `rotate(${angle}deg) translateY(-65px)`;
 
-        // On calcule l'angle de direction pour le jeu (-90 à 90)
         let steeringAngle = Math.atan2(deltaX, -deltaY) * (180 / Math.PI);
         steeringAngle = Math.max(-90, Math.min(90, steeringAngle));
         
@@ -282,7 +276,6 @@ function main() {
         if (!isDraggingWheel) return;
         isDraggingWheel = false;
 
-        // Transition douce pour ramener la poignée au centre
         wheelHandle.style.transition = 'transform 0.2s ease-out';
         wheelHandle.style.transform = 'rotate(0deg) translateY(-65px)';
         
@@ -338,7 +331,6 @@ function main() {
         rightButton.addEventListener(evt, stopTurn);
     });
 
-    // Événements pour le volant
     steeringWheel.addEventListener('mousedown', startSteering);
     steeringWheel.addEventListener('touchstart', (e) => { e.preventDefault(); startSteering(e); });
     

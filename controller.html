@@ -14,6 +14,7 @@
             --border-color: #dddddd;
             --control-button-bg: #e9e9eb;
             --control-button-active: #dcdce1;
+            --icon-color: #ffffff; /* Couleur pour les icônes sur les boutons */
             --selection-color: #f0f0f0;
         }
 
@@ -27,21 +28,19 @@
                 --border-color: #444444;
                 --control-button-bg: #3a3a3c;
                 --control-button-active: #4a4a4c;
+                --icon-color: #2c2c2e;
                 --selection-color: #333333;
             }
         }
         
-        html {
-            height: 100%;
-        }
-
+        html { height: 100%; }
         body {
             font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Helvetica, Arial, sans-serif;
             display: flex;
             flex-direction: column;
             justify-content: center;
             align-items: center;
-            height: 100dvh; /* Utilisation de dvh pour une meilleure gestion sur mobile */
+            height: 100dvh;
             margin: 0;
             background-color: var(--background-color);
             color: var(--text-primary);
@@ -52,7 +51,7 @@
             -webkit-tap-highlight-color: transparent;
             padding: 20px;
             box-sizing: border-box;
-            overflow: hidden; /* Empêche le rebond du viewport */
+            overflow: hidden;
         }
 
         .wrapper {
@@ -62,34 +61,23 @@
             width: 100%;
             max-width: 400px;
             box-sizing: border-box;
-            position: absolute; /* Permet la superposition pour les transitions */
+            position: absolute;
             opacity: 0;
             transform: translateY(20px);
             transition: opacity 0.3s ease-out, transform 0.3s ease-out;
-            pointer-events: none; /* Désactive les interactions quand caché */
+            pointer-events: none;
         }
 
         .wrapper.active {
             opacity: 1;
             transform: translateY(0);
-            pointer-events: auto; /* Réactive les interactions quand visible */
+            pointer-events: auto;
         }
         
-        .hidden {
-             display: none; /* Utilisé pour cacher complètement quand ce n'est pas nécessaire */
-        }
+        .hidden { display: none; }
 
-        h2 {
-            font-weight: 600;
-            font-size: 1.5em;
-            margin: 0 0 16px 0;
-        }
-
-        p {
-            color: var(--text-secondary);
-            margin: 0 0 20px 0;
-            line-height: 1.5;
-        }
+        h2 { font-weight: 600; font-size: 1.5em; margin: 0 0 16px 0; }
+        p { color: var(--text-secondary); margin: 0 0 20px 0; line-height: 1.5; }
 
         input {
             font-family: inherit;
@@ -106,12 +94,7 @@
             letter-spacing: 0.1em;
             transition: border-color 0.2s ease, box-shadow 0.2s ease;
         }
-
-        input:focus {
-            outline: none;
-            border-color: var(--primary-color);
-            box-shadow: 0 0 0 3px rgba(0, 122, 255, 0.2);
-        }
+        input:focus { outline: none; border-color: var(--primary-color); box-shadow: 0 0 0 3px rgba(0, 122, 255, 0.2); }
 
         button {
             font-family: inherit;
@@ -126,165 +109,71 @@
             margin-bottom: 8px;
             transition: background-color 0.2s ease, opacity 0.2s ease, transform 0.1s ease;
         }
+        button:active { transform: scale(0.98); }
 
-        button:active {
-            transform: scale(0.98);
-        }
+        #connect-button, #ready-button, #restart-button { background-color: var(--primary-color); color: white; }
+        #connect-button:active, #ready-button:active, #restart-button:active { opacity: 0.8; }
+        #search-sessions-button { background-color: var(--control-button-bg); color: var(--text-primary); font-weight: 500; }
+        #search-sessions-button:active { background-color: var(--control-button-active); }
+        button:disabled { background-color: var(--control-button-bg) !important; color: var(--text-secondary) !important; cursor: not-allowed; opacity: 0.7; }
 
-        #connect-button,
-        #ready-button,
-        #restart-button {
-            background-color: var(--primary-color);
-            color: white;
-        }
-        
-        #connect-button:active,
-        #ready-button:active,
-        #restart-button:active {
-             opacity: 0.8;
-        }
+        #session-list-container { margin-top: 1em; opacity: 1; transition: opacity 0.3s ease; }
+        #session-list-container.hidden { opacity: 0; pointer-events: none; }
+        #session-list { list-style: none; padding: 0; margin: 0; max-height: 150px; overflow-y: auto; }
+        #session-list li { background-color: var(--background-color); border-radius: 10px; padding: 14px 16px; margin-bottom: 8px; display: flex; justify-content: space-between; align-items: center; cursor: pointer; transition: background-color 0.2s ease; }
+        #session-list li:active { background-color: var(--selection-color); }
+        #session-list li span:last-child { color: var(--text-secondary); }
 
-        #search-sessions-button {
-            background-color: var(--control-button-bg);
-            color: var(--text-primary);
-            font-weight: 500;
-        }
-        #search-sessions-button:active {
-            background-color: var(--control-button-active);
-        }
+        #status { position: fixed; bottom: 20px; left: 50%; transform: translateX(-50%); background-color: var(--card-background-color); color: var(--text-secondary); padding: 8px 16px; border-radius: 20px; border: 1px solid var(--border-color); font-size: 0.9em; box-shadow: 0 4px 12px rgba(0, 0, 0, 0.1); z-index: 100; }
 
-        button:disabled {
-            background-color: var(--control-button-bg) !important;
-            color: var(--text-secondary) !important;
-            cursor: not-allowed;
-            opacity: 0.7;
-        }
+        #game-controls-view { display: flex; flex-direction: column; align-items: center; justify-content: space-between; height: 100%; max-height: 500px; padding: 20px; }
+        #mode-switcher { display: flex; background-color: var(--control-button-bg); border-radius: 12px; padding: 4px; }
+        .mode-button { flex: 1; padding: 8px 16px; border-radius: 9px; border: none; background-color: transparent; color: var(--text-secondary); font-weight: 500; cursor: pointer; transition: background-color 0.3s ease, color 0.3s ease; margin: 0; }
+        .mode-button.active { background-color: var(--card-background-color); color: var(--text-primary); box-shadow: 0 1px 3px rgba(0,0,0,0.1); }
 
-        #session-list-container {
-            margin-top: 1em;
-            opacity: 1;
-            transition: opacity 0.3s ease;
-        }
-        
-        #session-list-container.hidden {
-            opacity: 0;
-            pointer-events: none;
-        }
+        #arrows-controls, #wheel-controls { display: flex; align-items: center; width: 100%; flex-grow: 1; }
+        #arrows-controls { justify-content: space-evenly; }
 
-        #session-list {
-            list-style: none;
-            padding: 0;
-            margin: 0;
-            max-height: 150px;
-            overflow-y: auto;
-        }
-
-        #session-list li {
-            background-color: var(--background-color);
-            border-radius: 10px;
-            padding: 14px 16px;
-            margin-bottom: 8px;
-            display: flex;
-            justify-content: space-between;
-            align-items: center;
-            cursor: pointer;
-            transition: background-color 0.2s ease;
-        }
-
-        #session-list li:active {
-            background-color: var(--selection-color);
-        }
-
-        #session-list li span:last-child {
-            color: var(--text-secondary);
-        }
-
-        #status {
-            position: fixed;
-            bottom: 20px;
-            left: 50%;
-            transform: translateX(-50%);
-            background-color: var(--card-background-color);
-            color: var(--text-secondary);
-            padding: 8px 16px;
-            border-radius: 20px;
-            border: 1px solid var(--border-color);
-            font-size: 0.9em;
-            box-shadow: 0 4px 12px rgba(0, 0, 0, 0.1);
-            z-index: 100;
-        }
-
-        #game-controls-view {
-            display: flex;
-            flex-direction: column;
-            align-items: center;
-            justify-content: space-between;
-            height: 100%;
-            max-height: 500px;
-            padding: 20px;
-        }
-
-        #mode-switcher {
-            display: flex;
-            background-color: var(--control-button-bg);
-            border-radius: 12px;
-            padding: 4px;
-        }
-
-        .mode-button {
-            flex: 1;
-            padding: 8px 16px;
-            border-radius: 9px;
-            border: none;
-            background-color: transparent;
-            color: var(--text-secondary);
-            font-weight: 500;
-            cursor: pointer;
-            transition: background-color 0.3s ease, color 0.3s ease;
-            margin: 0;
-        }
-
-        .mode-button.active {
-            background-color: var(--card-background-color);
-            color: var(--text-primary);
-            box-shadow: 0 1px 3px rgba(0,0,0,0.1);
-        }
-
-        #arrows-controls, #wheel-controls {
-            display: flex;
-            align-items: center;
-            width: 100%;
-            flex-grow: 1;
-        }
-        
-        #arrows-controls {
-            justify-content: space-evenly;
-        }
-
+        /* DESIGN: Nouveau style pour les boutons de contrôle */
         .control-button {
-            width: 100px;
-            height: 100px;
-            border-radius: 50px;
+            width: 120px; /* Plus large pour un meilleur appui */
+            height: 80px;  /* Moins haut pour un style rectangulaire */
+            border-radius: 16px; /* Coins adoucis */
             background-color: var(--control-button-bg);
-            color: var(--text-primary);
-            font-size: 2.5em;
-            display: flex;
-            justify-content: center;
-            align-items: center;
             border: none;
             cursor: pointer;
-            box-shadow: 0 4px 8px rgba(0,0,0,0.05);
+            position: relative;
+            box-shadow: none; /* Style plat */
+            transition: background-color 0.1s ease;
         }
-        
         .control-button:active {
             background-color: var(--control-button-active);
-            transform: scale(0.95);
-            box-shadow: 0 2px 4px rgba(0,0,0,0.05);
+            transform: none; /* Pas de scale pour un feeling plus direct */
         }
         
-        #wheel-controls {
-            justify-content: center;
+        /* DESIGN: Icônes chevron en CSS pur */
+        .control-button::before {
+            content: '';
+            position: absolute;
+            top: 50%;
+            left: 50%;
+            width: 14px;
+            height: 14px;
+            border-style: solid;
+            border-color: var(--text-secondary);
+            border-width: 0 3px 3px 0;
+            transform-origin: center;
         }
+
+        #left-button::before {
+            transform: translate(-50%, -50%) rotate(135deg);
+        }
+
+        #right-button::before {
+            transform: translate(-50%, -50%) rotate(-45deg);
+        }
+        
+        #wheel-controls { justify-content: center; }
         
         #steering-wheel {
             width: 200px;
@@ -292,32 +181,28 @@
             border-radius: 50%;
             background-color: var(--control-button-bg);
             position: relative;
-            box-shadow: inset 0 0 15px rgba(0, 0, 0, 0.1), 0 4px 8px rgba(0,0,0,0.05);
-            transition: transform 0.1s linear;
+            box-shadow: none;
+            display: flex;
+            justify-content: center;
+            align-items: center;
         }
         
         #wheel-handle {
-            width: 70px;
-            height: 70px;
+            width: 50px;
+            height: 50px;
             background-color: var(--primary-color);
             border-radius: 50%;
             position: absolute;
-            opacity: 0.1;
+            top: 50%;
+            left: 50%;
+            margin-left: -25px;
+            margin-top: -25px;
+            transform: translateY(-65px);
+            pointer-events: none;
         }
         
-        #final-score {
-            font-size: 3em;
-            font-weight: bold;
-            margin: 20px 0;
-        }
-
-        .error-message {
-            color: #ff3b30;
-            font-size: 0.9em;
-            height: 1.2em;
-            margin-top: -1em;
-            margin-bottom: 1em;
-        }
+        #final-score { font-size: 3em; font-weight: bold; margin: 20px 0; }
+        .error-message { color: #ff3b30; font-size: 0.9em; height: 1.2em; margin-top: -1em; margin-bottom: 1em; }
     </style>
 </head>
 <body>
@@ -330,7 +215,6 @@
         <input type="number" inputmode="decimal" id="session-code-input" placeholder="000000" maxlength="6" autocomplete="off">
         <button id="connect-button">Connexion</button>
         <button id="search-sessions-button">Chercher des parties</button>
-
         <div id="session-list-container" class="hidden">
             <ul id="session-list"></ul>
         </div>
@@ -350,8 +234,8 @@
             <button id="wheel-mode-btn" class="mode-button">Volant</button>
         </div>
         <div id="arrows-controls" class="">
-            <button id="left-button" class="control-button">◄</button>
-            <button id="right-button" class="control-button">►</button>
+            <button id="left-button" class="control-button"></button>
+            <button id="right-button" class="control-button"></button>
         </div>
         <div id="wheel-controls" class="hidden">
             <div id="steering-wheel">
