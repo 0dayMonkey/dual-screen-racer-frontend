@@ -17,6 +17,23 @@ class LobbyScene extends Phaser.Scene {
     create() {
         GraphicsGenerator.createAllTextures(this);
 
+        // --- SOLUTION 1 : Bouton "Nouvelle Session" ---
+        const newSessionButton = this.add.text(this.scale.width - 20, 20, 'Nouvelle Session', { 
+            fontSize: '18px', 
+            fontFamily: 'monospace', 
+            color: '#ff4136',
+            backgroundColor: 'rgba(0,0,0,0.3)',
+            padding: { x: 10, y: 5 }
+        })
+        .setOrigin(1, 0)
+        .setInteractive({ useHandCursor: true });
+
+        newSessionButton.on('pointerdown', () => {
+            sessionStorage.removeItem('racerSessionCode');
+            window.location.reload();
+        });
+        // --- FIN SOLUTION 1 ---
+
         if (!this.socket) {
             this.socket = io("https://miaou.vps.webdock.cloud", { path: "/racer/socket.io/" });
             this.setupSocketEvents();
@@ -103,12 +120,21 @@ class LobbyScene extends Phaser.Scene {
     }
 
     redrawLobbyState() {
-        this.children.removeAll();
+        // Nettoyer uniquement les objets des joueurs, pas le bouton
+        this.playerObjects.forEach(p => {
+            p.car.destroy();
+            p.nameText.destroy();
+            p.readyIndicator.destroy();
+        });
         this.playerObjects.clear();
         
         if (this.sessionCode) {
-            this.add.text(this.scale.width / 2, 50, `Session: ${this.sessionCode}`, { fontSize: '40px', color: '#FFFFFF', fontFamily: 'monospace' }).setOrigin(0.5);
-            this.add.text(this.scale.width / 2, 100, 'Scannez le QR Code ou entrez le code', { fontSize: '20px', color: '#AAAAAA', fontFamily: 'monospace' }).setOrigin(0.5);
+            // Recréer les textes et QR code si nécessaire
+            if (this.sessionText) this.sessionText.destroy();
+            this.sessionText = this.add.text(this.scale.width / 2, 50, `Session: ${this.sessionCode}`, { fontSize: '40px', color: '#FFFFFF', fontFamily: 'monospace' }).setOrigin(0.5);
+            
+            if (this.scanText) this.scanText.destroy();
+            this.scanText = this.add.text(this.scale.width / 2, 100, 'Scannez le QR Code ou entrez le code', { fontSize: '20px', color: '#AAAAAA', fontFamily: 'monospace' }).setOrigin(0.5);
             
             this.generateAndDisplayQRCode();
         }
@@ -144,7 +170,7 @@ class LobbyScene extends Phaser.Scene {
     }
 
     addPlayerToLobby(player) {
-        const spacing = 65;
+        const spacing = 75;
         const startY = 320;
         const playerY = startY + this.playerObjects.size * spacing;
 
@@ -163,11 +189,16 @@ class LobbyScene extends Phaser.Scene {
 
     repositionPlayers() {
         let i = 0;
-        const spacing = 65;
+        const spacing = 75;
         const startY = 320;
-        this.playerObjects.forEach(playerObject => {
+        this.playerObjects.forEach((playerUI) => {
             const targetY = startY + i * spacing;
-            this.tweens.add({ targets: [playerObject.car, playerObject.readyIndicator, playerObject.nameText], y: targetY, ease: 'power2', duration: 500 });
+            this.tweens.add({ 
+                targets: [playerUI.car, playerUI.nameText, playerUI.readyIndicator], 
+                y: targetY, 
+                ease: 'power2', 
+                duration: 500 
+            });
             i++;
         });
     }
