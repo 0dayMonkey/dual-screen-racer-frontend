@@ -31,6 +31,8 @@ function main() {
     const rightButton = document.getElementById('right-button');
     const wheelControls = document.getElementById('wheel-controls');
     const steeringWheel = document.getElementById('steering-wheel');
+    const wheelHandle = document.getElementById('wheel-handle');
+
 
     function setStatus(message) {
         if (statusDiv) statusDiv.textContent = message;
@@ -246,37 +248,55 @@ function main() {
         if (controlMode !== 'arrows') return;
         socket.emit('stop_turn', { sessionCode });
     }
-
+    
     // FIX: Logique de rotation du volant simplifiée et corrigée
     function handleWheelMove(event) {
         if (!isDraggingWheel) return;
         event.preventDefault();
+
         const rect = steeringWheel.getBoundingClientRect();
         const centerX = rect.left + rect.width / 2;
+        const centerY = rect.top + rect.height / 2;
+        
         const clientX = event.touches ? event.touches[0].clientX : event.clientX;
+        const clientY = event.touches ? event.touches[0].clientY : event.clientY;
+
+        const deltaX = clientX - centerX;
+        const deltaY = clientY - centerY;
+
+        // Calcul de l'angle basé sur la position du toucher (atan2)
+        // L'angle 0 est à droite, on ajoute +90 pour que 0 soit en bas, et on inverse pour que le haut soit 0.
+        let angle = Math.atan2(deltaY, deltaX) * (180 / Math.PI) - 90;
+
+        // On fait tourner la poignée (le point bleu) pour suivre le doigt
+        wheelHandle.style.transform = `rotate(${angle}deg) translateY(-65px)`; // 65px = distance du centre
+
+        // On calcule l'angle de direction pour le jeu (-90 à 90)
+        let steeringAngle = Math.atan2(deltaX, -deltaY) * (180 / Math.PI);
+        steeringAngle = Math.max(-90, Math.min(90, steeringAngle));
         
-        // Calcule l'angle basé uniquement sur la déviation horizontale
-        const angle = ((clientX - centerX) / (rect.width / 2)) * 90;
-        const clampedAngle = Math.max(-90, Math.min(90, angle));
-        
-        steeringWheel.style.transform = `rotate(${clampedAngle}deg)`;
-        socket.emit('steer', { sessionCode, angle: clampedAngle });
+        socket.emit('steer', { sessionCode, angle: steeringAngle });
     }
 
     function stopSteering() {
         if (!isDraggingWheel) return;
         isDraggingWheel = false;
-        steeringWheel.style.transition = 'transform 0.2s ease-out';
-        steeringWheel.style.transform = 'rotate(0deg)';
+
+        // Transition douce pour ramener la poignée au centre
+        wheelHandle.style.transition = 'transform 0.2s ease-out';
+        wheelHandle.style.transform = 'rotate(0deg) translateY(-65px)';
+        
         socket.emit('steer', { sessionCode, angle: 0 });
+
         setTimeout(() => {
-            steeringWheel.style.transition = '';
+            wheelHandle.style.transition = '';
         }, 200);
     }
 
     function startSteering(event) {
         if (controlMode !== 'wheel') return;
         isDraggingWheel = true;
+        wheelHandle.style.transition = '';
         handleWheelMove(event);
     }
     
@@ -317,10 +337,14 @@ function main() {
         leftButton.addEventListener(evt, stopTurn);
         rightButton.addEventListener(evt, stopTurn);
     });
+
+    // Événements pour le volant
     steeringWheel.addEventListener('mousedown', startSteering);
-    steeringWheel.addEventListener('touchstart', startSteering);
+    steeringWheel.addEventListener('touchstart', (e) => { e.preventDefault(); startSteering(e); });
+    
     window.addEventListener('mousemove', handleWheelMove);
     window.addEventListener('touchmove', handleWheelMove);
+
     window.addEventListener('mouseup', stopSteering);
     window.addEventListener('touchend', stopSteering);
     
