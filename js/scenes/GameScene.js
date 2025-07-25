@@ -5,7 +5,7 @@ class GameScene extends Phaser.Scene {
         this.scoreDisplays = new Map();
         this.isGameRunning = false;
         this.finalScores = [];
-        this.cameraSpeed = 455; 
+        this.cameraSpeed = 465; 
     }
 
     init(data) {
