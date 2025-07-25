@@ -2,17 +2,15 @@ function main() {
     const serverUrl = "https://miaou.vps.webdock.cloud";
     let socket = null;
     let sessionCode = '';
-    let controlMode = 'arrows'; // 'arrows' ou 'wheel'
+    let controlMode = 'arrows';
     let isDraggingWheel = false;
 
-    // Vues
     const statusDiv = document.getElementById('status');
     const connectionWrapper = document.getElementById('connection-wrapper');
     const lobbyWrapper = document.getElementById('lobby-wrapper');
     const gameControlsView = document.getElementById('game-controls-view');
     const gameOverWrapper = document.getElementById('game-over-wrapper');
 
-    // Éléments interactifs
     const sessionCodeInput = document.getElementById('session-code-input');
     const connectButton = document.getElementById('connect-button');
     const nicknameInput = document.getElementById('nickname-input');
@@ -20,7 +18,6 @@ function main() {
     const finalScoreText = document.getElementById('final-score');
     const restartButton = document.getElementById('restart-button');
 
-    // Contrôles
     const arrowsModeBtn = document.getElementById('arrows-mode-btn');
     const wheelModeBtn = document.getElementById('wheel-mode-btn');
     const arrowsControls = document.getElementById('arrows-controls');
@@ -73,7 +70,6 @@ function main() {
         }
     }
     
-    // --- DEBUT DE LA CORRECTION : FONCTION RESTAURÉE ---
     function checkForActiveSessions() {
         setStatus('Recherche de session...');
         const tempSocket = io(serverUrl, {
@@ -119,10 +115,7 @@ function main() {
             }
         }, 100);
     }
-    // --- FIN DE LA CORRECTION ---
 
-
-    // --- LOGIQUE SOCKET ---
     function setupSocketEvents() {
         socket.on('disconnect', () => { setStatus('Déconnecté.'); showView('connect'); });
         socket.on('invalid_session', () => setStatus('Session invalide.'));
@@ -152,8 +145,6 @@ function main() {
         readyButton.disabled = true;
     }
 
-    // --- LOGIQUE DE CONTROLES ---
-    
     function startTurn(direction) { socket.emit('start_turn', { sessionCode, direction }); }
     function stopTurn() { socket.emit('stop_turn', { sessionCode }); }
 
@@ -193,8 +184,6 @@ function main() {
         handleWheelMove(event);
     }
 
-    // --- LISTENERS ---
-    
     connectButton.addEventListener('click', connect);
     nicknameInput.addEventListener('input', () => socket.emit('update_name', { sessionCode, name: nicknameInput.value || 'Joueur' }));
     readyButton.addEventListener('click', signalReady);
@@ -219,9 +208,8 @@ function main() {
     window.addEventListener('mouseup', stopSteering);
     window.addEventListener('touchend', stopSteering);
 
-    // Initialisation
     showView('connect');
-    checkForActiveSessions(); // Appel de la fonction restaurée
+    checkForActiveSessions();
 }
 
 main();

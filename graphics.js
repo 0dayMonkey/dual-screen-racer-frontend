@@ -1,11 +1,9 @@
 const GraphicsGenerator = {
     createAllTextures: function(scene) {
-        // Textures originales nécessaires au jeu
         this._createCarTexture(scene);
         this._createParticleTexture(scene);
         this._createRoadTexture(scene);
 
-        // Nouvelles textures d'obstacles
         this._createBoxTexture(scene);
         this._createConeTexture(scene);
         this._createTireTexture(scene);
@@ -14,8 +12,6 @@ const GraphicsGenerator = {
         this._createTreeTexture(scene);
         this._createRockTexture(scene);
     },
-
-    // --- TEXTURES ORIGINALES ---
 
     _createCarTexture: function(scene) {
         const carWidth = 40;
@@ -63,8 +59,6 @@ const GraphicsGenerator = {
         g.generateTexture('road_texture', gameWidth, gameHeight);
         g.destroy();
     },
-
-    // --- NOUVELLES TEXTURES D'OBSTACLES ---
 
     _createBoxTexture: function(scene) {
         const boxSize = 60;
