@@ -58,7 +58,6 @@ class LobbyScene extends Phaser.Scene {
     }
 
     setupSocketEvents() {
-        // Clear previous listeners to avoid duplicates
         this.socket.off('session_created');
         this.socket.off('player_joined');
         this.socket.off('player_status_updated');
@@ -69,7 +68,6 @@ class LobbyScene extends Phaser.Scene {
         this.socket.off('host_reconnected');
         this.socket.off('session_not_found');
 
-        // --- Event Handlers ---
         this.socket.on('session_created', (data) => {
             this.sessionCode = data.sessionCode;
             sessionStorage.setItem('racerSessionCode', data.sessionCode);
