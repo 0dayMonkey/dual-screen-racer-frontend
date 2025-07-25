@@ -6,6 +6,7 @@ class GameScene extends Phaser.Scene {
         this.isGameRunning = false;
         this.finalScores = [];
         this.scoreUIElements = new Map();
+        this.lobbyReturnTimerEvent = null; // Ajout pour gérer le timer
         this.cameraSpeed = 465; 
     }
 
@@ -85,8 +86,28 @@ class GameScene extends Phaser.Scene {
         if (this.socket) {
             this.socket.emit('game_over', { score: this.finalScores.length > 0 ? this.finalScores[0].score : 0, sessionCode: this.sessionCode });
         }
-    }
+        
+        // --- AJOUT DE LA LOGIQUE DU TIMER ---
+        let countdown = 30;
+        const timerText = this.add.text(screenCenterX, screenCenterY + 160, `Retour au lobby dans ${countdown}s...`, {
+            fontSize: '18px',
+            fill: '#AAAAAA'
+        }).setOrigin(0.5).setScrollFactor(0);
 
+        this.lobbyReturnTimerEvent = this.time.addEvent({
+            delay: 1000,
+            callback: () => {
+                countdown--;
+                timerText.setText(`Retour au lobby dans ${countdown}s...`);
+                if (countdown <= 0) {
+                    this.lobbyReturnTimerEvent.remove();
+                }
+            },
+            loop: true
+        });
+    }
+    
+    // --- (le reste du fichier est inchangé) ---
     setupSocketListeners() {
         this.socket.off('start_turn');
         this.socket.off('stop_turn');
@@ -94,7 +115,6 @@ class GameScene extends Phaser.Scene {
         this.socket.off('player_left');
         this.socket.off('player_wants_to_replay');
 
-        // --- CORRECTION : Restauration de la logique des contrôles ---
         this.socket.on('start_turn', ({ playerId, direction }) => {
             if (this.players.has(playerId)) {
                 this.players.get(playerId).targetAngle = (direction === 'left' ? -45 : 45);
@@ -124,7 +144,6 @@ class GameScene extends Phaser.Scene {
                 }
             }
         });
-        // --- FIN DE LA CORRECTION ---
 
         this.socket.on('player_wants_to_replay', ({ playerId }) => {
             if (this.scoreUIElements.has(playerId)) {

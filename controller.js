@@ -5,6 +5,7 @@ function main() {
     let playerId = '';
     let controlMode = 'arrows';
     let isDraggingWheel = false;
+    let gameOverTimer = null; // Ajout pour gérer le timer
 
     const statusDiv = document.getElementById('status');
     const connectionWrapper = document.getElementById('connection-wrapper');
@@ -32,6 +33,12 @@ function main() {
     }
 
     function showView(viewName) {
+        // --- AJOUT : Nettoyage du timer au changement de vue ---
+        if (gameOverTimer) {
+            clearInterval(gameOverTimer);
+            gameOverTimer = null;
+        }
+
         connectionWrapper.classList.add('hidden');
         lobbyWrapper.classList.add('hidden');
         gameControlsView.classList.add('hidden');
@@ -90,11 +97,27 @@ function main() {
             restartButton.textContent = "Rejouer";
             showView('lobby');
         });
+
+        // --- MODIFICATION DE LA GESTION DE FIN DE PARTIE ---
         socket.on('game_over', (data) => {
             if (data && typeof data.score !== 'undefined') {
                 finalScoreText.textContent = data.score;
             }
             showView('gameover');
+
+            let countdown = 30;
+            const originalStatus = statusDiv.textContent;
+            setStatus(`Retour au lobby dans ${countdown}s...`);
+
+            gameOverTimer = setInterval(() => {
+                countdown--;
+                if (countdown > 0) {
+                    setStatus(`Retour au lobby dans ${countdown}s...`);
+                } else {
+                    setStatus(originalStatus);
+                    clearInterval(gameOverTimer);
+                }
+            }, 1000);
         });
     }
 
@@ -129,7 +152,8 @@ function main() {
         restartButton.disabled = true;
         restartButton.textContent = "En attente des autres...";
     }
-
+    
+    // --- (le reste du fichier est inchangé) ---
     function switchControlMode(newMode) {
         controlMode = newMode;
         if (newMode === 'arrows') {
