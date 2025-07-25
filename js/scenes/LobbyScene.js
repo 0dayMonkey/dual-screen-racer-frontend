@@ -5,7 +5,7 @@ class LobbyScene extends Phaser.Scene {
         this.sessionCode = null;
         this.playerObjects = new Map();
         this.initialPlayers = [];
-        this.qrElement = document.getElementById('qrcode-container');
+        this.qrCodeImage = null;
     }
 
     init(data) {
@@ -58,7 +58,10 @@ class LobbyScene extends Phaser.Scene {
         
         this.socket.on('session_not_found', () => {
             sessionStorage.removeItem('racerSessionCode');
-            if(this.qrElement) this.qrElement.style.display = 'none';
+            if (this.qrCodeImage) {
+                this.qrCodeImage.destroy();
+                this.qrCodeImage = null;
+            }
             this.socket.emit('create_session');
         });
 
@@ -87,7 +90,7 @@ class LobbyScene extends Phaser.Scene {
         });
 
         this.socket.on('start_game_for_all', (data) => {
-            if(this.qrElement) this.qrElement.style.display = 'none';
+            if (this.qrCodeImage) this.qrCodeImage.setVisible(false);
             this.scene.start('GameScene', { socket: this.socket, sessionCode: this.sessionCode, players: data.players });
         });
 
@@ -102,28 +105,45 @@ class LobbyScene extends Phaser.Scene {
         
         if (this.sessionCode) {
             this.add.text(this.scale.width / 2, 50, `Session: ${this.sessionCode}`, { fontSize: '40px', color: '#FFFFFF', fontFamily: 'monospace' }).setOrigin(0.5);
-            this.add.text(this.scale.width / 2, 100, 'Scannez le QR Code ou entrez le code', { fontSize: '20px', color: '#888888', fontFamily: 'monospace' }).setOrigin(0.5);
+            this.add.text(this.scale.width / 2, 100, 'Scannez le QR Code ou entrez le code', { fontSize: '20px', color: '#AAAAAA', fontFamily: 'monospace' }).setOrigin(0.5);
             
-            if (this.qrElement) {
-                this.qrElement.innerHTML = '';
-                this.qrElement.style.display = 'block';
-                const url = `https://harib-naim.fr/projects/racer/controller.html?sessionCode=${this.sessionCode}`;
-                new QRious({
-                    element: this.qrElement,
-                    value: url,
-                    size: 150,
-                    backgroundAlpha: 0,
-                    foreground: 'white',
-                    padding: 0
-                });
-            }
+            this.generateAndDisplayQRCode();
         }
         
         this.initialPlayers.forEach(player => this.addPlayerToLobby(player));
     }
 
+    generateAndDisplayQRCode() {
+        const url = `https://harib-naim.fr/projects/racer/controller.html?sessionCode=${this.sessionCode}`;
+        const tempCanvas = document.createElement('canvas');
+        
+        const qr = new QRious({
+            element: tempCanvas,
+            value: url,
+            size: 256,
+            background: 'white',
+            foreground: 'black'
+        });
+
+        const qrDataURL = tempCanvas.toDataURL();
+        const textureKey = `qr_${this.sessionCode}`;
+
+        if (this.textures.exists(textureKey)) {
+            this.textures.remove(textureKey);
+        }
+
+        this.textures.addBase64(textureKey, qrDataURL);
+        this.textures.once('addtexture', () => {
+            if (this.qrCodeImage) {
+                this.qrCodeImage.destroy();
+            }
+            this.qrCodeImage = this.add.image(this.scale.width / 2, 220, textureKey).setScale(0.6);
+        }, this);
+    }
+
+
     addPlayerToLobby(player) {
-        const playerY = 380 + this.playerObjects.size * 100;
+        const playerY = 400 + this.playerObjects.size * 100;
         const car = this.add.sprite(this.scale.width / 2, playerY, 'car_texture').setTint(Phaser.Display.Color.ValueToColor(player.color).color).setScale(1.2);
         const readyIndicator = this.add.text(car.x + 100, car.y, '✔', { fontSize: '48px', fill: '#2ECC40' }).setOrigin(0.5).setVisible(player.isReady);
         const nameText = this.add.text(car.x, car.y - 60, player.name || 'Joueur', { fontSize: '24px', fill: '#FFF' }).setOrigin(0.5);
@@ -131,16 +151,16 @@ class LobbyScene extends Phaser.Scene {
         this.playerObjects.set(player.id, { car, readyIndicator, nameText });
         
         car.setAngle(90);
-        car.x = -100;
-        nameText.x = -100;
+        car.x = this.scale.width + 100;
+        nameText.x = this.scale.width + 100;
         
-        this.tweens.add({ targets: [car, nameText], x: this.scale.width / 2 - 50, ease: 'Cubic.easeOut', duration: 1200 });
+        this.tweens.add({ targets: [car, nameText], x: this.scale.width / 2 - 50, ease: 'Cubic.easeOut', duration: 800 });
     }
 
     repositionPlayers() {
         let i = 0;
         this.playerObjects.forEach(pObj => {
-            const targetY = 380 + i * 100;
+            const targetY = 400 + i * 100;
             this.tweens.add({ targets: [pObj.car, pObj.readyIndicator, pObj.nameText], y: targetY, ease: 'power2', duration: 500 });
             i++;
         });
