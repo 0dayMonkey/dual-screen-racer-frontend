@@ -254,14 +254,13 @@
             border-radius: 12px;
             border: 1px solid var(--border-color);
             cursor: pointer;
-            transition: background-color 0.2s ease, transform 0.2s ease;
             font-weight: 500;
             display: flex;
             justify-content: space-between;
             align-items: center;
+            transition: background-color 0.2s ease;
         }
-        #session-list li:hover {
-            transform: scale(1.03);
+        #session-list li:active {
             background-color: var(--secondary-button-bg);
         }
         #session-list li > span:last-child {
