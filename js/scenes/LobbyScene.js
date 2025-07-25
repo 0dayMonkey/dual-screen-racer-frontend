@@ -58,6 +58,7 @@ class LobbyScene extends Phaser.Scene {
     }
 
     setupSocketEvents() {
+        // Clear previous listeners to avoid duplicates
         this.socket.off('session_created');
         this.socket.off('player_joined');
         this.socket.off('player_status_updated');
@@ -68,6 +69,7 @@ class LobbyScene extends Phaser.Scene {
         this.socket.off('host_reconnected');
         this.socket.off('session_not_found');
 
+        // --- Event Handlers ---
         this.socket.on('session_created', (data) => {
             this.sessionCode = data.sessionCode;
             sessionStorage.setItem('racerSessionCode', data.sessionCode);
@@ -121,7 +123,7 @@ class LobbyScene extends Phaser.Scene {
                 this.tweens.add({
                     targets: playerCard,
                     alpha: 0,
-                    scale: 0.8,
+                    x: playerCard.x - 100, // Le fait sortir par la gauche
                     duration: 300,
                     ease: 'Cubic.easeIn',
                     onComplete: () => {
@@ -199,7 +201,8 @@ class LobbyScene extends Phaser.Scene {
         // --- Player Card Container ---
         const cardWidth = 250;
         const cardHeight = 150;
-        const playerCard = this.add.container(0, 0); // Position will be set by repositionPlayers
+        // Position initiale hors de l'écran, à gauche. Le Y sera corrigé par repositionPlayers.
+        const playerCard = this.add.container(-cardWidth, this.scale.height / 2);
 
         // Card background
         const background = this.add.graphics()
@@ -234,15 +237,8 @@ class LobbyScene extends Phaser.Scene {
         playerCard.setData({ nameText, car, readyIndicator });
         
         this.playerObjects.set(player.id, playerCard);
-
-        // Entrance animation
-        playerCard.setScale(0);
-        this.tweens.add({
-            targets: playerCard,
-            scale: 1,
-            duration: 400,
-            ease: 'Cubic.easeOut'
-        });
+        
+        // L'animation d'entrée est maintenant gérée par la fonction repositionPlayers
     }
 
     repositionPlayers() {
@@ -262,12 +258,14 @@ class LobbyScene extends Phaser.Scene {
             const targetX = startX + col * (cardWidth + spacingX);
             const targetY = startY + row * (playerCard.height + spacingY);
 
+            // Smoothly move the card to its new position.
+            // This will animate new players from their off-screen position.
             this.tweens.add({
                 targets: playerCard,
                 x: targetX,
                 y: targetY,
-                duration: 500,
-                ease: 'Power2'
+                duration: 700, // Durée légèrement augmentée pour un effet plus fluide
+                ease: 'Cubic.easeOut' // Une courbe douce pour l'accélération/décélération
             });
             i++;
         });
