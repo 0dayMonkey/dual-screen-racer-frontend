@@ -207,6 +207,29 @@
             margin-top: -1em;
             margin-bottom: 1em;
         }
+        #session-list-container {
+            margin-top: 1.5em;
+            width: 100%;
+        }
+        #session-list {
+            list-style: none;
+            padding: 0;
+            max-height: 150px;
+            overflow-y: auto;
+        }
+        #session-list li {
+            background-color: var(--background-color);
+            padding: 12px;
+            margin: 8px 0;
+            border-radius: 8px;
+            border: 1px solid var(--border-color);
+            cursor: pointer;
+            transition: background-color 0.2s ease;
+        }
+        #session-list li:hover {
+            background-color: var(--primary-color);
+            color: white;
+        }
     </style>
 </head>
 <body>
@@ -215,9 +238,14 @@
 
     <div id="connection-wrapper" class="wrapper">
         <h2>Entrez le code</h2>
-        <p>Rejoignez la partie en entrant le code affiché sur l'écran principal.</p>
+        <p>Rejoignez une partie en entrant un code ou en cherchant les parties disponibles.</p>
         <input type="number" inputmode="decimal" id="session-code-input" placeholder="000000" maxlength="6" autocomplete="off">
         <button id="connect-button">Connexion</button>
+                <button id="search-sessions-button" style="background-color: var(--subtle-text-color);">Chercher des parties</button>
+
+                   <div id="session-list-container" class="hidden">
+            <ul id="session-list"></ul>
+        </div>     
     </div>
 
     <div id="lobby-wrapper" class="wrapper hidden">

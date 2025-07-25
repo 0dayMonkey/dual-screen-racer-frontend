@@ -17,7 +17,6 @@ class LobbyScene extends Phaser.Scene {
     create() {
         GraphicsGenerator.createAllTextures(this);
 
-        // --- SOLUTION 1 : Bouton "Nouvelle Session" ---
         const newSessionButton = this.add.text(this.scale.width - 20, 20, 'Nouvelle Session', { 
             fontSize: '18px', 
             fontFamily: 'monospace', 
@@ -32,7 +31,6 @@ class LobbyScene extends Phaser.Scene {
             sessionStorage.removeItem('racerSessionCode');
             window.location.reload();
         });
-        // --- FIN SOLUTION 1 ---
 
         if (!this.socket) {
             this.socket = io("https://miaou.vps.webdock.cloud", { path: "/racer/socket.io/" });
@@ -120,7 +118,6 @@ class LobbyScene extends Phaser.Scene {
     }
 
     redrawLobbyState() {
-        // Nettoyer uniquement les objets des joueurs, pas le bouton
         this.playerObjects.forEach(p => {
             p.car.destroy();
             p.nameText.destroy();
@@ -129,7 +126,6 @@ class LobbyScene extends Phaser.Scene {
         this.playerObjects.clear();
         
         if (this.sessionCode) {
-            // Recréer les textes et QR code si nécessaire
             if (this.sessionText) this.sessionText.destroy();
             this.sessionText = this.add.text(this.scale.width / 2, 50, `Session: ${this.sessionCode}`, { fontSize: '40px', color: '#FFFFFF', fontFamily: 'monospace' }).setOrigin(0.5);
             
@@ -171,7 +167,7 @@ class LobbyScene extends Phaser.Scene {
 
     addPlayerToLobby(player) {
         const spacing = 75;
-        const startY = 320;
+        const startY = 400;
         const playerY = startY + this.playerObjects.size * spacing;
 
         const car = this.add.sprite(this.scale.width / 2, playerY, 'car_texture').setTint(Phaser.Display.Color.ValueToColor(player.color).color).setScale(1.0);
@@ -190,7 +186,7 @@ class LobbyScene extends Phaser.Scene {
     repositionPlayers() {
         let i = 0;
         const spacing = 75;
-        const startY = 320;
+        const startY = 400;
         this.playerObjects.forEach((playerUI) => {
             const targetY = startY + i * spacing;
             this.tweens.add({ 
