@@ -114,7 +114,7 @@ class LobbyScene extends Phaser.Scene {
     }
 
     generateAndDisplayQRCode() {
-        const url = `https://harib-naim.fr/projects/racer/controller.html?sessionCode=${this.sessionCode}`;
+        const url = `https://harib-naim.fr/racer/controller.html?sessionCode=${this.sessionCode}`;
         const tempCanvas = document.createElement('canvas');
         
         const qr = new QRious({
