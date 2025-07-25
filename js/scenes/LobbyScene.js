@@ -177,7 +177,7 @@ class LobbyScene extends Phaser.Scene {
     }
     
     generateAndDisplayQRCode() {
-        const url = `https://harib-naim.fr/projects/racer/controller.html?sessionCode=${this.sessionCode}`;
+        const url = `https://harib-naim.fr/racer/controller.html?sessionCode=${this.sessionCode}`;
         const textureKey = `qr_${this.sessionCode}`;
 
         if (this.textures.exists(textureKey)) {
