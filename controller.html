@@ -13,6 +13,7 @@
             --primary-color: #007aff;
             --border-color: #e1e4e8;
             --wheel-color: #e0e0e0;
+            --error-color: #FF4136;
         }
         
         @media (prefers-color-scheme: dark) {
@@ -198,6 +199,14 @@
         }
 
         #final-score { font-size: 4em; font-weight: 700; color: var(--text-color); margin: 0.2em 0; }
+        
+        .error-message {
+            color: var(--error-color);
+            font-size: 0.9em;
+            height: 1.2em;
+            margin-top: -1em;
+            margin-bottom: 1em;
+        }
     </style>
 </head>
 <body>
@@ -214,7 +223,8 @@
     <div id="lobby-wrapper" class="wrapper hidden">
         <h2>Salle d'attente</h2>
         <p>Entrez un pseudo et appuyez sur "Prêt".</p>
-        <input type="text" id="nickname-input" placeholder="Votre pseudo" maxlength="12" style="font-size: 1.5em; text-align: center; margin-bottom: 1em;">
+        <input type="text" id="nickname-input" placeholder="Votre pseudo" maxlength="12" style="font-size: 1.5em; text-align: center; margin-bottom: 0.5em;">
+        <div id="nickname-error" class="error-message"></div>
         <button id="ready-button">Prêt</button>
     </div>
 

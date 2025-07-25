@@ -6,7 +6,7 @@ class GameScene extends Phaser.Scene {
         this.isGameRunning = false;
         this.finalScores = [];
         this.scoreUIElements = new Map();
-        this.lobbyReturnTimerEvent = null; // Ajout pour gérer le timer
+        this.lobbyReturnTimerEvent = null;
         this.cameraSpeed = 465; 
     }
 
@@ -87,7 +87,6 @@ class GameScene extends Phaser.Scene {
             this.socket.emit('game_over', { score: this.finalScores.length > 0 ? this.finalScores[0].score : 0, sessionCode: this.sessionCode });
         }
         
-        // --- AJOUT DE LA LOGIQUE DU TIMER ---
         let countdown = 30;
         const timerText = this.add.text(screenCenterX, screenCenterY + 160, `Retour au lobby dans ${countdown}s...`, {
             fontSize: '18px',
@@ -106,8 +105,7 @@ class GameScene extends Phaser.Scene {
             loop: true
         });
     }
-    
-    // --- (le reste du fichier est inchangé) ---
+
     setupSocketListeners() {
         this.socket.off('start_turn');
         this.socket.off('stop_turn');

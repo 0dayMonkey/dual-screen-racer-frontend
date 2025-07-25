@@ -65,7 +65,9 @@ class LobbyScene extends Phaser.Scene {
             this.socket.emit('create_session');
         });
 
-        this.socket.on('player_joined', (player) => this.addPlayerToLobby(player));
+        this.socket.on('player_joined', (player) => {
+            this.addPlayerToLobby(player);
+        });
 
         this.socket.on('player_status_updated', ({ playerId, isReady }) => {
             if (this.playerObjects.has(playerId)) {
@@ -81,9 +83,10 @@ class LobbyScene extends Phaser.Scene {
 
         this.socket.on('player_left', ({ playerId }) => {
             if (this.playerObjects.has(playerId)) {
-                this.playerObjects.get(playerId).car.destroy();
-                this.playerObjects.get(playerId).readyIndicator.destroy();
-                this.playerObjects.get(playerId).nameText.destroy();
+                const playerObject = this.playerObjects.get(playerId);
+                playerObject.car.destroy();
+                playerObject.readyIndicator.destroy();
+                playerObject.nameText.destroy();
                 this.playerObjects.delete(playerId);
                 this.repositionPlayers();
             }
@@ -113,9 +116,8 @@ class LobbyScene extends Phaser.Scene {
         this.initialPlayers.forEach(player => this.addPlayerToLobby(player));
     }
     
-    // --- FONCTION CORRIGÉE ---
     generateAndDisplayQRCode() {
-        const url = `https://harib-naim.fr/racer/controller.html?sessionCode=${this.sessionCode}`;
+        const url = `https://harib-naim.fr/projects/racer/controller.html?sessionCode=${this.sessionCode}`;
         const textureKey = `qr_${this.sessionCode}`;
 
         if (this.textures.exists(textureKey)) {
@@ -141,12 +143,14 @@ class LobbyScene extends Phaser.Scene {
         });
     }
 
-
     addPlayerToLobby(player) {
-        const playerY = 400 + this.playerObjects.size * 100;
-        const car = this.add.sprite(this.scale.width / 2, playerY, 'car_texture').setTint(Phaser.Display.Color.ValueToColor(player.color).color).setScale(1.2);
-        const readyIndicator = this.add.text(car.x + 100, car.y, '✔', { fontSize: '48px', fill: '#2ECC40' }).setOrigin(0.5).setVisible(player.isReady);
-        const nameText = this.add.text(car.x, car.y - 60, player.name || 'Joueur', { fontSize: '24px', fill: '#FFF' }).setOrigin(0.5);
+        const spacing = 65;
+        const startY = 320;
+        const playerY = startY + this.playerObjects.size * spacing;
+
+        const car = this.add.sprite(this.scale.width / 2, playerY, 'car_texture').setTint(Phaser.Display.Color.ValueToColor(player.color).color).setScale(1.0);
+        const readyIndicator = this.add.text(car.x + 80, car.y, '✔', { fontSize: '38px', fill: '#2ECC40' }).setOrigin(0.5).setVisible(player.isReady);
+        const nameText = this.add.text(car.x, car.y - 50, player.name || 'Joueur', { fontSize: '20px', fill: '#FFF' }).setOrigin(0.5);
         
         this.playerObjects.set(player.id, { car, readyIndicator, nameText });
         
@@ -159,9 +163,11 @@ class LobbyScene extends Phaser.Scene {
 
     repositionPlayers() {
         let i = 0;
-        this.playerObjects.forEach(pObj => {
-            const targetY = 400 + i * 100;
-            this.tweens.add({ targets: [pObj.car, pObj.readyIndicator, pObj.nameText], y: targetY, ease: 'power2', duration: 500 });
+        const spacing = 65;
+        const startY = 320;
+        this.playerObjects.forEach(playerObject => {
+            const targetY = startY + i * spacing;
+            this.tweens.add({ targets: [playerObject.car, playerObject.readyIndicator, playerObject.nameText], y: targetY, ease: 'power2', duration: 500 });
             i++;
         });
     }

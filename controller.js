@@ -5,7 +5,7 @@ function main() {
     let playerId = '';
     let controlMode = 'arrows';
     let isDraggingWheel = false;
-    let gameOverTimer = null; // Ajout pour gérer le timer
+    let gameOverTimer = null;
 
     const statusDiv = document.getElementById('status');
     const connectionWrapper = document.getElementById('connection-wrapper');
@@ -16,6 +16,7 @@ function main() {
     const sessionCodeInput = document.getElementById('session-code-input');
     const connectButton = document.getElementById('connect-button');
     const nicknameInput = document.getElementById('nickname-input');
+    const nicknameError = document.getElementById('nickname-error');
     const readyButton = document.getElementById('ready-button');
     const finalScoreText = document.getElementById('final-score');
     const restartButton = document.getElementById('restart-button');
@@ -33,7 +34,6 @@ function main() {
     }
 
     function showView(viewName) {
-        // --- AJOUT : Nettoyage du timer au changement de vue ---
         if (gameOverTimer) {
             clearInterval(gameOverTimer);
             gameOverTimer = null;
@@ -67,8 +67,9 @@ function main() {
             setStatus('Déconnecté.');
             showView('connect');
         });
-        socket.on('invalid_session', () => {
-            setStatus('Session invalide ou pleine.');
+        socket.on('invalid_session', (data) => {
+            let message = (data && data.message) ? data.message : 'Session invalide ou pleine.';
+            setStatus(message);
             sessionStorage.removeItem('racerSessionCode');
             sessionStorage.removeItem('racerPlayerId');
         });
@@ -88,7 +89,7 @@ function main() {
             showView('lobby');
         });
         socket.on('start_game_for_all', () => {
-            showView('controls')
+            showView('controls');
         });
         socket.on('return_to_lobby', () => {
             readyButton.disabled = false;
@@ -97,8 +98,6 @@ function main() {
             restartButton.textContent = "Rejouer";
             showView('lobby');
         });
-
-        // --- MODIFICATION DE LA GESTION DE FIN DE PARTIE ---
         socket.on('game_over', (data) => {
             if (data && typeof data.score !== 'undefined') {
                 finalScoreText.textContent = data.score;
@@ -106,7 +105,7 @@ function main() {
             showView('gameover');
 
             let countdown = 30;
-            const originalStatus = statusDiv.textContent;
+            const originalStatus = statusMap['gameover'];
             setStatus(`Retour au lobby dans ${countdown}s...`);
 
             gameOverTimer = setInterval(() => {
@@ -118,6 +117,12 @@ function main() {
                     clearInterval(gameOverTimer);
                 }
             }, 1000);
+        });
+        socket.on('name_already_taken', () => {
+            if (nicknameError) nicknameError.textContent = "Ce pseudo est déjà utilisé.";
+            setTimeout(() => {
+                if (nicknameError) nicknameError.textContent = "";
+            }, 3000);
         });
     }
 
@@ -134,26 +139,20 @@ function main() {
             });
             setupSocketEvents();
             socket.on('connect', () => {
-                socket.emit('join_session', {
-                    sessionCode
-                });
+                socket.emit('join_session', { sessionCode });
             });
         } else {
-            socket.emit('join_session', {
-                sessionCode
-            });
+            socket.emit('join_session', { sessionCode });
         }
     }
 
     function requestReplay() {
-        socket.emit('request_replay', {
-            sessionCode
-        });
+        if(nicknameError) nicknameError.textContent = "";
+        socket.emit('request_replay', { sessionCode });
         restartButton.disabled = true;
         restartButton.textContent = "En attente des autres...";
     }
-    
-    // --- (le reste du fichier est inchangé) ---
+
     function switchControlMode(newMode) {
         controlMode = newMode;
         if (newMode === 'arrows') {
@@ -217,17 +216,12 @@ function main() {
 
     function startTurn(direction) {
         if (controlMode !== 'arrows') return;
-        socket.emit('start_turn', {
-            sessionCode,
-            direction
-        });
+        socket.emit('start_turn', { sessionCode, direction });
     }
 
     function stopTurn() {
         if (controlMode !== 'arrows') return;
-        socket.emit('stop_turn', {
-            sessionCode
-        });
+        socket.emit('stop_turn', { sessionCode });
     }
 
     function handleWheelMove(event) {
@@ -243,10 +237,7 @@ function main() {
         let angle = Math.atan2(deltaY, deltaX) * (180 / Math.PI) + 90;
         angle = Math.max(-90, Math.min(90, angle));
         steeringWheel.style.transform = `rotate(${angle}deg)`;
-        socket.emit('steer', {
-            sessionCode,
-            angle
-        });
+        socket.emit('steer', { sessionCode, angle });
     }
 
     function stopSteering() {
@@ -254,10 +245,7 @@ function main() {
         isDraggingWheel = false;
         steeringWheel.style.transition = 'transform 0.2s ease-out';
         steeringWheel.style.transform = 'rotate(0deg)';
-        socket.emit('steer', {
-            sessionCode,
-            angle: 0
-        });
+        socket.emit('steer', { sessionCode, angle: 0 });
         setTimeout(() => {
             steeringWheel.style.transition = 'transform 0.1s linear';
         }, 200);
@@ -283,14 +271,12 @@ function main() {
     }
 
     connectButton.addEventListener('click', connect);
-    nicknameInput.addEventListener('input', () => socket.emit('update_name', {
-        sessionCode,
-        name: nicknameInput.value || 'Joueur'
-    }));
+    nicknameInput.addEventListener('input', () => {
+        if(nicknameError) nicknameError.textContent = "";
+        socket.emit('update_name', { sessionCode, name: nicknameInput.value || 'Joueur' });
+    });
     readyButton.addEventListener('click', () => {
-        socket.emit('player_ready', {
-            sessionCode
-        });
+        socket.emit('player_ready', { sessionCode });
         readyButton.textContent = "En attente...";
         readyButton.disabled = true;
     });
@@ -298,15 +284,9 @@ function main() {
     arrowsModeBtn.addEventListener('click', () => switchControlMode('arrows'));
     wheelModeBtn.addEventListener('click', () => switchControlMode('wheel'));
     leftButton.addEventListener('mousedown', () => startTurn('left'));
-    leftButton.addEventListener('touchstart', (e) => {
-        e.preventDefault();
-        startTurn('left');
-    });
+    leftButton.addEventListener('touchstart', (e) => { e.preventDefault(); startTurn('left'); });
     rightButton.addEventListener('mousedown', () => startTurn('right'));
-    rightButton.addEventListener('touchstart', (e) => {
-        e.preventDefault();
-        startTurn('right');
-    });
+    rightButton.addEventListener('touchstart', (e) => { e.preventDefault(); startTurn('right'); });
     ['mouseup', 'mouseleave', 'touchend'].forEach(evt => {
         leftButton.addEventListener(evt, stopTurn);
         rightButton.addEventListener(evt, stopTurn);
