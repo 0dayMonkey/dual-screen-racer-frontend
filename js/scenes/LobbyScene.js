@@ -152,7 +152,7 @@ class LobbyScene extends Phaser.Scene {
         
         car.setAngle(90);
         car.x = -100;
-        nameText.x = this.scale.width + 100;
+        nameText.x = -100;
         
         this.tweens.add({ targets: [car, nameText], x: this.scale.width / 2 - 50, ease: 'Cubic.easeOut', duration: 800 });
     }
