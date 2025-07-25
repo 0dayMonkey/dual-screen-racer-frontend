@@ -176,11 +176,22 @@ function main() {
 
             if (sessions.length > 0) {
                 setStatus('Sessions trouvées !');
+                const sleep = ms => new Promise(resolve => setTimeout(resolve, ms));
+
                 sessions.forEach(session => {
                     const li = document.createElement('li');
-                    li.textContent = `Session ${session.sessionCode} (${session.playerCount}/10 joueurs)`;
-                    li.addEventListener('click', () => {
-                        sessionCodeInput.value = session.sessionCode;
+                    li.innerHTML = `<span>Session ${session.sessionCode} (${session.playerCount}/10)</span><span>&rsaquo;</span>`;
+                    li.addEventListener('click', async () => {
+                        sessionListContainer.classList.add('hidden');
+                        sessionCodeInput.value = '';
+                        connectButton.disabled = true;
+                        searchSessionsButton.disabled = true;
+
+                        for (const digit of session.sessionCode) {
+                            sessionCodeInput.value += digit;
+                            await sleep(120);
+                        }
+                        
                         connect();
                     });
                     sessionList.appendChild(li);
