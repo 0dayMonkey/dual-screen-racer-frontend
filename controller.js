@@ -49,7 +49,6 @@ function main() {
             gameOverTimer = null;
         }
 
-        // Retire 'active' de toutes les vues pour les cacher/animer leur sortie
         connectionWrapper.classList.remove('active');
         lobbyWrapper.classList.remove('active');
         gameControlsView.classList.remove('active');
@@ -62,7 +61,6 @@ function main() {
             'gameover': gameOverWrapper
         };
         
-        // Attendre un court instant pour que l'animation de sortie se termine avant de cacher
         setTimeout(() => {
             connectionWrapper.classList.add('hidden');
             lobbyWrapper.classList.add('hidden');
@@ -72,11 +70,10 @@ function main() {
             if (viewMap[viewName]) {
                 const activeView = viewMap[viewName];
                 activeView.classList.remove('hidden');
-                // Forcer un reflow pour que l'animation d'entrée fonctionne
                 void activeView.offsetWidth; 
                 activeView.classList.add('active');
             }
-        }, 300); // Doit correspondre à la durée de la transition CSS
+        }, 300);
 
         setStatus(statusMap[viewName] || 'En attente...');
     }
@@ -89,8 +86,6 @@ function main() {
         socket.on('invalid_session', (data) => {
             let message = (data && data.message) ? data.message : 'Session invalide ou pleine.';
             setStatus(message);
-            sessionStorage.removeItem('racerSessionCode');
-            sessionStorage.removeItem('racerPlayerId');
         });
         socket.on('session_closed', () => {
             setStatus('Session fermée par l\'hôte.');
@@ -101,8 +96,6 @@ function main() {
         socket.on('lobby_joined', (data) => {
             sessionCode = sessionCodeInput.value;
             playerId = data.playerId;
-            sessionStorage.setItem('racerSessionCode', sessionCode);
-            sessionStorage.setItem('racerPlayerId', playerId);
             readyButton.disabled = false;
             readyButton.textContent = "Prêt";
             showView('lobby');
@@ -153,9 +146,7 @@ function main() {
         setStatus('Connexion...');
         connectButton.disabled = true;
         if (!socket || !socket.connected) {
-            socket = io(serverUrl, {
-                path: "/racer/socket.io/"
-            });
+            socket = io(serverUrl, { path: "/racer/socket.io/" });
             setupSocketEvents();
             socket.on('connect', () => {
                 socket.emit('join_session', { sessionCode });
@@ -181,9 +172,7 @@ function main() {
             searchSessionsButton.disabled = false;
         }, 5000);
 
-        tempSocket.on('connect', () => {
-            tempSocket.emit('request_active_sessions');
-        });
+        tempSocket.on('connect', () => tempSocket.emit('request_active_sessions'));
 
         tempSocket.on('available_sessions_list', (sessions) => {
             clearTimeout(searchTimeout);
@@ -258,14 +247,18 @@ function main() {
         socket.emit('stop_turn', { sessionCode });
     }
 
+    // FIX: Logique de rotation du volant simplifiée et corrigée
     function handleWheelMove(event) {
         if (!isDraggingWheel) return;
         event.preventDefault();
         const rect = steeringWheel.getBoundingClientRect();
         const centerX = rect.left + rect.width / 2;
         const clientX = event.touches ? event.touches[0].clientX : event.clientX;
+        
+        // Calcule l'angle basé uniquement sur la déviation horizontale
         const angle = ((clientX - centerX) / (rect.width / 2)) * 90;
         const clampedAngle = Math.max(-90, Math.min(90, angle));
+        
         steeringWheel.style.transform = `rotate(${clampedAngle}deg)`;
         socket.emit('steer', { sessionCode, angle: clampedAngle });
     }
@@ -304,7 +297,6 @@ function main() {
     nicknameInput.addEventListener('input', () => {
         if(nicknameError) nicknameError.textContent = "";
         const newName = nicknameInput.value || 'Joueur';
-        sessionStorage.setItem('racerNickname', newName);
         if (socket && socket.connected) {
             socket.emit('update_name', { sessionCode, name: newName });
         }

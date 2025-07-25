@@ -201,7 +201,6 @@ class LobbyScene extends Phaser.Scene {
         // --- Player Card Container ---
         const cardWidth = 250;
         const cardHeight = 150;
-        // Position initiale hors de l'écran, à gauche. Le Y sera corrigé par repositionPlayers.
         const playerCard = this.add.container(-cardWidth, this.scale.height / 2);
 
         // Card background
@@ -229,16 +228,12 @@ class LobbyScene extends Phaser.Scene {
             fill: '#2ECC40' 
         }).setOrigin(0.5).setVisible(player.isReady);
 
-        // Add all elements to the container
         playerCard.add([background, nameText, car, readyIndicator]);
         playerCard.setSize(cardWidth, cardHeight);
 
-        // Store references to elements for easy access
-        playerCard.setData({ nameText, car, readyIndicator });
+        playerCard.setData({ nameText, car, readyIndicator, isNew: true });
         
         this.playerObjects.set(player.id, playerCard);
-        
-        // L'animation d'entrée est maintenant gérée par la fonction repositionPlayers
     }
 
     repositionPlayers() {
@@ -258,14 +253,34 @@ class LobbyScene extends Phaser.Scene {
             const targetX = startX + col * (cardWidth + spacingX);
             const targetY = startY + row * (playerCard.height + spacingY);
 
-            // Smoothly move the card to its new position.
-            // This will animate new players from their off-screen position.
+            // NOUVEAU : Crée un émetteur de fumée si la carte est nouvelle
+            if (playerCard.getData('isNew')) {
+                playerCard.setData('isNew', false); // Marque comme n'étant plus nouvelle
+
+                const lobbySmoke = this.add.particles(0, 0, 'smoke_particle', {
+                    speed: { min: 20, max: 50 },
+                    angle: 180, // Dirigé vers la gauche
+                    scale: { start: 1, end: 0 },
+                    alpha: { start: 0.5, end: 0 },
+                    lifespan: 800,
+                    frequency: 50,
+                    blendMode: 'NORMAL'
+                });
+                lobbySmoke.startFollow(playerCard.getData('car'));
+
+                // Arrête et détruit l'émetteur après l'animation
+                this.time.delayedCall(700, () => {
+                    lobbySmoke.stop();
+                    this.time.delayedCall(1000, () => lobbySmoke.destroy());
+                });
+            }
+
             this.tweens.add({
                 targets: playerCard,
                 x: targetX,
                 y: targetY,
-                duration: 700, // Durée légèrement augmentée pour un effet plus fluide
-                ease: 'Cubic.easeOut' // Une courbe douce pour l'accélération/décélération
+                duration: 700,
+                ease: 'Cubic.easeOut'
             });
             i++;
         });
