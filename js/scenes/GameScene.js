@@ -112,6 +112,7 @@ class GameScene extends Phaser.Scene {
         this.socket.off('steer');
         this.socket.off('player_left');
         this.socket.off('player_wants_to_replay');
+        this.socket.off('return_to_lobby');
 
         this.socket.on('start_turn', ({ playerId, direction }) => {
             if (this.players.has(playerId)) {
@@ -148,6 +149,17 @@ class GameScene extends Phaser.Scene {
                 const ui = this.scoreUIElements.get(playerId);
                 ui.replayIndicator.setText('✔️').setColor('#2ECC40');
             }
+        });
+
+        this.socket.on('return_to_lobby', (data) => {
+            if (this.lobbyReturnTimerEvent) {
+                this.lobbyReturnTimerEvent.remove(); // Nettoyer le timer visuel
+            }
+            this.scene.start('LobbyScene', { 
+                socket: this.socket, 
+                sessionCode: this.sessionCode, 
+                players: data.players 
+            });
         });
     }
 
