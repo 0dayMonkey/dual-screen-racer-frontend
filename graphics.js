@@ -4,6 +4,8 @@ const GraphicsGenerator = {
         this._createParticleTexture(scene);
         this._createRoadTexture(scene);
 
+                this._createSmokeParticleTexture(scene);
+
         this._createBoxTexture(scene);
         this._createConeTexture(scene);
         this._createTireTexture(scene);
@@ -35,7 +37,15 @@ const GraphicsGenerator = {
         g.generateTexture('particle_texture', 12, 12);
         g.destroy();
     },
-
+_createSmokeParticleTexture: function(scene) {
+        const g = scene.make.graphics({ x: 0, y: 0, add: false });
+        const size = 16;
+        // Création d'un cercle doux et semi-transparent
+        g.fillGradientStyle(0xcccccc, 0xcccccc, 0xcccccc, 0xcccccc, 1, 1, 0, 0);
+        g.fillCircle(size / 2, size / 2, size / 2);
+        g.generateTexture('smoke_particle', size, size);
+        g.destroy();
+    },
     _createRoadTexture: function(scene) {
         const g = scene.make.graphics({ x: 0, y: 0, add: false });
         const gameWidth = scene.scale.width;
