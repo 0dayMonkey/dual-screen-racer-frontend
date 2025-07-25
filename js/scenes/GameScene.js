@@ -5,6 +5,7 @@ class GameScene extends Phaser.Scene {
         this.scoreDisplays = new Map();
         this.isGameRunning = false;
         this.finalScores = [];
+        this.scoreUIElements = new Map(); // --- MODIFICATION ---
         this.cameraSpeed = 465; 
     }
 
@@ -13,38 +14,32 @@ class GameScene extends Phaser.Scene {
         this.sessionCode = data.sessionCode;
         this.playerInfo = data.players; 
     }
-
+    
+    // ... (la méthode create() reste majoritairement la même jusqu'à endGame) ...
     create() {
         this.finalScores = [];
         this.players.clear();
         this.scoreDisplays.clear();
+        this.scoreUIElements.clear(); // --- MODIFICATION ---
 
         this.road = this.add.tileSprite(this.scale.width / 2, this.scale.height / 2, this.scale.width, this.scale.height, 'road_texture');
         this.physics.world.setBounds(0, -1000000, this.scale.width, 1000000 + this.scale.height);
 
         this.obstacleManager = new ObstacleManager(this);
 
-        // --- DEBUT DE LA MODIFICATION ---
-        // On définit la zone où les voitures peuvent apparaître.
-        const roadWidth = this.scale.width * 0.70; // La route fait 70% de l'écran
-        const roadLeftBoundary = this.scale.width * 0.15; // Elle commence à 15% du bord
-        const spawnableWidth = roadWidth - 60; // On retire une marge pour ne pas être collé au bord
+        const roadWidth = this.scale.width * 0.70;
+        const roadLeftBoundary = this.scale.width * 0.15;
+        const spawnableWidth = roadWidth - 60;
 
         this.playerInfo.forEach((playerData, index) => {
-            // On calcule la position de chaque joueur à l'intérieur de la zone de la route.
-            const spacing = spawnableWidth / (this.playerInfo.length);
+            const spacing = this.playerInfo.length > 1 ? spawnableWidth / (this.playerInfo.length - 1) : 0;
             const startX = roadLeftBoundary + 30 + (index * spacing);
 
             const player = new Player(this, startX, this.scale.height - 150, playerData);
             this.players.set(playerData.id, player);
-        // --- FIN DE LA MODIFICATION ---
 
             const scoreText = this.add.text(16, 16 + (index * 30), `${player.name}: 0`, { 
-                fontSize: '20px', 
-                fill: '#FFF', 
-                fontStyle: 'bold',
-                stroke: '#000',
-                strokeThickness: 4
+                fontSize: '20px', fill: '#FFF', fontStyle: 'bold', stroke: '#000', strokeThickness: 4
             }).setScrollFactor(0);
 
             scoreText.setTint(Phaser.Display.Color.ValueToColor(playerData.color).color);
@@ -56,27 +51,85 @@ class GameScene extends Phaser.Scene {
         this.setupSocketListeners();
         this.startCountdown();
     }
-    
+
+    endGame() {
+        if (!this.isGameRunning) return;
+        this.isGameRunning = false;
+        this.physics.pause();
+        this.cameras.main.stopFollow();
+
+        this.players.forEach(player => {
+            this.finalScores.push({ id: player.playerId, name: player.name, score: player.score });
+            player.destroy();
+        });
+        this.players.clear();
+
+        const screenCenterX = this.scale.width / 2;
+        const screenCenterY = this.scale.height / 2;
+
+        this.add.rectangle(screenCenterX, screenCenterY, 450, 400, 0x000000, 0.7).setScrollFactor(0);
+        const title = this.add.text(screenCenterX, screenCenterY - 150, 'Scores Finaux', { fontSize: '32px', fill: '#fff' }).setOrigin(0.5).setScrollFactor(0);
+        
+        this.finalScores.sort((a, b) => b.score - a.score);
+
+        this.finalScores.forEach((scoreEntry, index) => {
+            const playerInfo = this.playerInfo.find(p => p.id === scoreEntry.id);
+            const color = playerInfo ? playerInfo.color : '#FFFFFF';
+            const name = scoreEntry.name || 'Joueur';
+            const yPos = title.y + 60 + (index * 40);
+            
+            const scoreText = this.add.text(screenCenterX - 20, yPos, `${name}: ${scoreEntry.score}`, { fontSize: '24px' }).setOrigin(1, 0.5).setScrollFactor(0).setTint(Phaser.Display.Color.ValueToColor(color).color);
+            // --- MODIFICATION --- : Préparer l'indicateur de "Rejouer"
+            const replayIndicator = this.add.text(screenCenterX - 10, yPos, '...', { fontSize: '24px', fill: '#888' }).setOrigin(0, 0.5).setScrollFactor(0);
+            this.scoreUIElements.set(scoreEntry.id, { scoreText, replayIndicator });
+        });
+
+        if (this.socket) {
+            this.socket.emit('game_over', { score: this.finalScores.length > 0 ? this.finalScores[0].score : 0, sessionCode: this.sessionCode });
+        }
+        
+        // --- MODIFICATION --- : On supprime le retour automatique au lobby. On attend l'événement du serveur.
+        // this.time.delayedCall(10000, () => this.scene.start('LobbyScene', ...));
+    }
+
+    setupSocketListeners() {
+        this.socket.off('start_turn');
+        this.socket.off('stop_turn');
+        this.socket.off('steer');
+        this.socket.off('player_left');
+        this.socket.off('player_wants_to_replay'); // --- MODIFICATION ---
+
+        this.socket.on('start_turn', ({ playerId, direction }) => { /* ... */ });
+        this.socket.on('stop_turn', ({ playerId }) => { /* ... */ });
+        this.socket.on('steer', ({ playerId, angle }) => { /* ... */ });
+        this.socket.on('player_left', ({ playerId }) => { /* ... */ });
+
+        // --- MODIFICATION --- : Mettre à jour l'UI quand un joueur veut rejouer
+        this.socket.on('player_wants_to_replay', ({ playerId }) => {
+            if (this.scoreUIElements.has(playerId)) {
+                const ui = this.scoreUIElements.get(playerId);
+                ui.replayIndicator.setText('✔️').setColor('#2ECC40');
+            }
+        });
+    }
+
+    // ... (le reste de la scène GameScene.js reste inchangé) ...
     playerHitObstacle(player, obstacle) {
         player.body.velocity.y = 250; 
         player.setTint(0xff0000);
         this.cameras.main.shake(100, 0.005);
         this.time.delayedCall(300, () => player.setTint(player.originalColor));
     }
-
     update(time, delta) {
         if (!this.isGameRunning) return;
-
         if (this.players.size === 0) {
             if (this.isGameRunning) this.endGame();
             return;
         }
-
         let leadPlayer = null;
         let leadPlayerY = Number.MAX_VALUE;
         let minX = Number.MAX_VALUE;
         let maxX = Number.MIN_VALUE;
-
         this.players.forEach(player => {
             player.updateMovement(delta);
             if (player.y < leadPlayerY) {
@@ -86,48 +139,38 @@ class GameScene extends Phaser.Scene {
             minX = Math.min(minX, player.x);
             maxX = Math.max(maxX, player.x);
         });
-
         if (this.players.size > 1) {
             const playerSpread = maxX - minX;
             const padding = this.scale.width * 0.4;
             const targetZoom = Phaser.Math.Clamp(this.scale.width / (playerSpread + padding), 0.6, 1.2);
             this.cameras.main.setZoom(Phaser.Math.Interpolation.Linear([this.cameras.main.zoom, targetZoom], 0.05));
-
             const groupCenterX = (minX + maxX) / 2;
             const targetX = groupCenterX - this.cameras.main.width / 2;
             this.cameras.main.scrollX = Phaser.Math.Interpolation.Linear([this.cameras.main.scrollX, targetX], 0.05);
-
             const targetY = leadPlayer.y - this.scale.height * 0.8;
             const newScrollY = Math.min(this.cameras.main.scrollY, targetY);
             this.cameras.main.scrollY = Phaser.Math.Interpolation.Linear([this.cameras.main.scrollY, newScrollY], 0.05);
-
-        } else { 
+        } else if (leadPlayer) { 
             this.cameras.main.scrollY -= (this.cameraSpeed * delta) / 1000;
             const targetX = (this.scale.width / 2) - this.cameras.main.width / 2;
             this.cameras.main.scrollX = Phaser.Math.Interpolation.Linear([this.cameras.main.scrollX, targetX], 0.05);
             this.cameras.main.setZoom(Phaser.Math.Interpolation.Linear([this.cameras.main.zoom, 1.2], 0.05));
         }
-
         this.road.y = this.cameras.main.worldView.centerY;
         this.road.tilePositionY = this.cameras.main.scrollY;
-        
         this.obstacleManager.update(leadPlayer);
-        
         this.players.forEach(player => {
             player.score = Math.max(0, Math.floor(-(player.y - this.scale.height) / 10));
             if (this.scoreDisplays.has(player.playerId)) {
                 this.scoreDisplays.get(player.playerId).setText(`${player.name}: ${player.score}`);
             }
         });
-        
         this.checkPlayerElimination();
     }
-    
     checkPlayerElimination() {
         const cameraBounds = this.cameras.main.worldView;
         const playersToEliminate = [];
         const eliminationDelay = 2000;
-
         this.players.forEach(player => {
             if (player.y > cameraBounds.bottom + 50) {
                 if (player.offScreenSince === null) {
@@ -142,7 +185,6 @@ class GameScene extends Phaser.Scene {
                 player.setAlpha(1);
             }
         });
-
         playersToEliminate.forEach(playerId => {
             if (this.players.has(playerId)) {
                 const player = this.players.get(playerId);
@@ -157,90 +199,10 @@ class GameScene extends Phaser.Scene {
                 }
             }
         });
-        
         if (this.isGameRunning && this.players.size === 0) {
             this.endGame();
         }
     }
-
-    endGame() {
-        if (!this.isGameRunning) return;
-        this.isGameRunning = false;
-        
-        this.physics.pause();
-        this.cameras.main.stopFollow();
-
-        this.players.forEach(player => {
-            this.finalScores.push({ id: player.playerId, name: player.name, score: player.score });
-            player.destroy();
-        });
-        this.players.clear();
-
-        const screenCenterX = this.scale.width / 2;
-        const screenCenterY = this.scale.height / 2;
-
-        const rect = this.add.rectangle(screenCenterX, screenCenterY, 400, 300, 0x000000, 0.7).setScrollFactor(0);
-        
-        const title = this.add.text(screenCenterX, screenCenterY - 120, 'Scores Finaux', { fontSize: '32px', fill: '#fff' }).setOrigin(0.5).setScrollFactor(0);
-        
-        this.finalScores.sort((a, b) => b.score - a.score);
-
-        this.finalScores.forEach((scoreEntry, index) => {
-            const playerInfo = this.playerInfo.find(p => p.id === scoreEntry.id);
-            const color = playerInfo ? playerInfo.color : '#FFFFFF';
-            const name = scoreEntry.name || 'Joueur';
-            const yPos = title.y + 60 + (index * 40);
-            this.add.text(screenCenterX, yPos, `${name}: ${scoreEntry.score}`, { fontSize: '24px' }).setOrigin(0.5).setScrollFactor(0).setTint(Phaser.Display.Color.ValueToColor(color).color);
-        });
-
-        if (this.socket) this.socket.emit('game_over', { score: this.finalScores.length > 0 ? this.finalScores[0].score : 0, sessionCode: this.sessionCode });
-        this.time.delayedCall(10000, () => this.scene.start('LobbyScene', { socket: this.socket, sessionCode: this.sessionCode, players: this.playerInfo }));
-    }
-
-    setupSocketListeners() {
-        // Nettoyer les anciens écouteurs pour éviter les doublons lors du redémarrage d'une scène
-        this.socket.off('start_turn');
-        this.socket.off('stop_turn');
-        this.socket.off('steer');
-        this.socket.off('player_left');
-
-        // Pour le mode Flèches (on simule un angle cible)
-        this.socket.on('start_turn', ({ playerId, direction }) => {
-            if (this.players.has(playerId)) {
-                this.players.get(playerId).targetAngle = (direction === 'left' ? -45 : 45);
-            }
-        });
-
-        this.socket.on('stop_turn', ({ playerId }) => {
-            if (this.players.has(playerId)) {
-                this.players.get(playerId).targetAngle = 0;
-            }
-        });
-
-        // Pour le mode Volant
-        this.socket.on('steer', ({ playerId, angle }) => {
-            if (this.players.has(playerId)) {
-                // On met directement à jour l'angle cible avec la valeur du volant
-                this.players.get(playerId).targetAngle = angle;
-            }
-        });
-
-        // Gestion de la déconnexion d'un joueur en cours de partie
-        this.socket.on('player_left', ({ playerId }) => {
-            if (this.players.has(playerId)) {
-                // Détruire l'objet joueur
-                this.players.get(playerId).destroy();
-                this.players.delete(playerId);
-                
-                // Détruire son affichage de score
-                if (this.scoreDisplays.has(playerId)) {
-                    this.scoreDisplays.get(playerId).destroy();
-                    this.scoreDisplays.delete(playerId);
-                }
-            }
-        });
-    }
-
     startCountdown() {
         const countdownText = this.add.text(this.scale.width / 2, this.scale.height / 2, '3', { fontSize: '128px', fill: '#FFF', stroke: '#000', strokeThickness: 8 }).setOrigin(0.5).setScrollFactor(0);
         let count = 3;

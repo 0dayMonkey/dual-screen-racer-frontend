@@ -19,7 +19,14 @@ class LobbyScene extends Phaser.Scene {
         if (!this.socket) {
             this.socket = io("https://miaou.vps.webdock.cloud", { path: "/racer/socket.io/" });
             this.setupSocketEvents();
-            this.socket.emit('create_session');
+
+            // --- MODIFICATION --- : Logique de reconnexion de l'hôte
+            const storedCode = sessionStorage.getItem('racerSessionCode');
+            if (storedCode) {
+                this.socket.emit('reconnect_host', { sessionCode: storedCode });
+            } else {
+                this.socket.emit('create_session');
+            }
         } else {
             this.setupSocketEvents(); 
             this.redrawLobbyState();
@@ -27,6 +34,7 @@ class LobbyScene extends Phaser.Scene {
     }
 
     setupSocketEvents() {
+        // Nettoyage des anciens écouteurs
         this.socket.off('session_created');
         this.socket.off('player_joined');
         this.socket.off('player_status_updated');
@@ -34,10 +42,27 @@ class LobbyScene extends Phaser.Scene {
         this.socket.off('player_left');
         this.socket.off('start_game_for_all');
         this.socket.off('return_to_lobby');
+        this.socket.off('host_reconnected'); // --- MODIFICATION ---
+        this.socket.off('session_not_found'); // --- MODIFICATION ---
 
         this.socket.on('session_created', (data) => {
             this.sessionCode = data.sessionCode;
+            // --- MODIFICATION --- : Sauvegarder le code de session
+            sessionStorage.setItem('racerSessionCode', data.sessionCode);
             this.redrawLobbyState();
+        });
+        
+        // --- MODIFICATION --- : Gérer la reconnexion réussie
+        this.socket.on('host_reconnected', (data) => {
+            this.sessionCode = data.sessionCode;
+            this.initialPlayers = data.players;
+            this.redrawLobbyState();
+        });
+        
+        // --- MODIFICATION --- : Gérer le cas où la session n'est plus valide
+        this.socket.on('session_not_found', () => {
+            sessionStorage.removeItem('racerSessionCode');
+            this.socket.emit('create_session'); // Créer une nouvelle session
         });
 
         this.socket.on('player_joined', (player) => this.addPlayerToLobby(player));
@@ -74,11 +99,12 @@ class LobbyScene extends Phaser.Scene {
     }
 
     redrawLobbyState() {
+        // ... (Le reste de la fonction reste inchangé) ...
         this.children.removeAll();
         this.playerObjects.clear();
         if (this.sessionCode) {
             this.add.text(this.scale.width / 2, 50, `Session: ${this.sessionCode}`, { fontSize: '40px', fontFamily: 'monospace' }).setOrigin(0.5);
-            this.add.text(this.scale.width / 2, 100, 'Les joueurs peuvent rejoindre...', { fontSize: '20px', fontFamily: 'monospace' }).setOrigin(0.5);
+            this.add.text(this.scale.width / 2, 100, 'Scannez le QR Code ou entrez le code', { fontSize: '20px', fontFamily: 'monospace' }).setOrigin(0.5);
         }
         this.initialPlayers.forEach(player => this.addPlayerToLobby(player));
     }
@@ -88,13 +114,10 @@ class LobbyScene extends Phaser.Scene {
         const car = this.add.sprite(this.scale.width / 2, playerY, 'car_texture').setTint(Phaser.Display.Color.ValueToColor(player.color).color).setScale(1.2);
         const readyIndicator = this.add.text(car.x + 100, car.y, '✔', { fontSize: '48px', fill: '#2ECC40' }).setOrigin(0.5).setVisible(player.isReady);
         const nameText = this.add.text(car.x, car.y - 60, player.name || 'Joueur', { fontSize: '24px', fill: '#FFF' }).setOrigin(0.5);
-        
         this.playerObjects.set(player.id, { car, readyIndicator, nameText });
-        
         car.setAngle(90);
         car.x = -100;
-        nameText.x = -100; 
-        
+        nameText.x = -100;
         this.tweens.add({ targets: [car, nameText], x: this.scale.width / 2 - 50, ease: 'Cubic.easeOut', duration: 1200 });
     }
 
