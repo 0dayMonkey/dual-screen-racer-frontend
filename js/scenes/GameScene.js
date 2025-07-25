@@ -5,7 +5,7 @@ class GameScene extends Phaser.Scene {
         this.scoreDisplays = new Map();
         this.isGameRunning = false;
         this.finalScores = [];
-        this.scoreUIElements = new Map(); // --- MODIFICATION ---
+        this.scoreUIElements = new Map();
         this.cameraSpeed = 465; 
     }
 
@@ -15,12 +15,11 @@ class GameScene extends Phaser.Scene {
         this.playerInfo = data.players; 
     }
     
-    // ... (la méthode create() reste majoritairement la même jusqu'à endGame) ...
     create() {
         this.finalScores = [];
         this.players.clear();
         this.scoreDisplays.clear();
-        this.scoreUIElements.clear(); // --- MODIFICATION ---
+        this.scoreUIElements.clear();
 
         this.road = this.add.tileSprite(this.scale.width / 2, this.scale.height / 2, this.scale.width, this.scale.height, 'road_texture');
         this.physics.world.setBounds(0, -1000000, this.scale.width, 1000000 + this.scale.height);
@@ -79,7 +78,6 @@ class GameScene extends Phaser.Scene {
             const yPos = title.y + 60 + (index * 40);
             
             const scoreText = this.add.text(screenCenterX - 20, yPos, `${name}: ${scoreEntry.score}`, { fontSize: '24px' }).setOrigin(1, 0.5).setScrollFactor(0).setTint(Phaser.Display.Color.ValueToColor(color).color);
-            // --- MODIFICATION --- : Préparer l'indicateur de "Rejouer"
             const replayIndicator = this.add.text(screenCenterX - 10, yPos, '...', { fontSize: '24px', fill: '#888' }).setOrigin(0, 0.5).setScrollFactor(0);
             this.scoreUIElements.set(scoreEntry.id, { scoreText, replayIndicator });
         });
@@ -87,9 +85,6 @@ class GameScene extends Phaser.Scene {
         if (this.socket) {
             this.socket.emit('game_over', { score: this.finalScores.length > 0 ? this.finalScores[0].score : 0, sessionCode: this.sessionCode });
         }
-        
-        // --- MODIFICATION --- : On supprime le retour automatique au lobby. On attend l'événement du serveur.
-        // this.time.delayedCall(10000, () => this.scene.start('LobbyScene', ...));
     }
 
     setupSocketListeners() {
@@ -97,14 +92,40 @@ class GameScene extends Phaser.Scene {
         this.socket.off('stop_turn');
         this.socket.off('steer');
         this.socket.off('player_left');
-        this.socket.off('player_wants_to_replay'); // --- MODIFICATION ---
+        this.socket.off('player_wants_to_replay');
 
-        this.socket.on('start_turn', ({ playerId, direction }) => { /* ... */ });
-        this.socket.on('stop_turn', ({ playerId }) => { /* ... */ });
-        this.socket.on('steer', ({ playerId, angle }) => { /* ... */ });
-        this.socket.on('player_left', ({ playerId }) => { /* ... */ });
+        // --- CORRECTION : Restauration de la logique des contrôles ---
+        this.socket.on('start_turn', ({ playerId, direction }) => {
+            if (this.players.has(playerId)) {
+                this.players.get(playerId).targetAngle = (direction === 'left' ? -45 : 45);
+            }
+        });
 
-        // --- MODIFICATION --- : Mettre à jour l'UI quand un joueur veut rejouer
+        this.socket.on('stop_turn', ({ playerId }) => {
+            if (this.players.has(playerId)) {
+                this.players.get(playerId).targetAngle = 0;
+            }
+        });
+
+        this.socket.on('steer', ({ playerId, angle }) => {
+            if (this.players.has(playerId)) {
+                this.players.get(playerId).targetAngle = angle;
+            }
+        });
+
+        this.socket.on('player_left', ({ playerId }) => {
+            if (this.players.has(playerId)) {
+                this.players.get(playerId).destroy();
+                this.players.delete(playerId);
+                
+                if (this.scoreDisplays.has(playerId)) {
+                    this.scoreDisplays.get(playerId).destroy();
+                    this.scoreDisplays.delete(playerId);
+                }
+            }
+        });
+        // --- FIN DE LA CORRECTION ---
+
         this.socket.on('player_wants_to_replay', ({ playerId }) => {
             if (this.scoreUIElements.has(playerId)) {
                 const ui = this.scoreUIElements.get(playerId);
@@ -113,23 +134,25 @@ class GameScene extends Phaser.Scene {
         });
     }
 
-    // ... (le reste de la scène GameScene.js reste inchangé) ...
     playerHitObstacle(player, obstacle) {
         player.body.velocity.y = 250; 
         player.setTint(0xff0000);
         this.cameras.main.shake(100, 0.005);
         this.time.delayedCall(300, () => player.setTint(player.originalColor));
     }
+
     update(time, delta) {
         if (!this.isGameRunning) return;
         if (this.players.size === 0) {
             if (this.isGameRunning) this.endGame();
             return;
         }
+
         let leadPlayer = null;
         let leadPlayerY = Number.MAX_VALUE;
         let minX = Number.MAX_VALUE;
         let maxX = Number.MIN_VALUE;
+
         this.players.forEach(player => {
             player.updateMovement(delta);
             if (player.y < leadPlayerY) {
@@ -139,38 +162,48 @@ class GameScene extends Phaser.Scene {
             minX = Math.min(minX, player.x);
             maxX = Math.max(maxX, player.x);
         });
+
         if (this.players.size > 1) {
             const playerSpread = maxX - minX;
             const padding = this.scale.width * 0.4;
             const targetZoom = Phaser.Math.Clamp(this.scale.width / (playerSpread + padding), 0.6, 1.2);
             this.cameras.main.setZoom(Phaser.Math.Interpolation.Linear([this.cameras.main.zoom, targetZoom], 0.05));
+
             const groupCenterX = (minX + maxX) / 2;
             const targetX = groupCenterX - this.cameras.main.width / 2;
             this.cameras.main.scrollX = Phaser.Math.Interpolation.Linear([this.cameras.main.scrollX, targetX], 0.05);
+
             const targetY = leadPlayer.y - this.scale.height * 0.8;
             const newScrollY = Math.min(this.cameras.main.scrollY, targetY);
             this.cameras.main.scrollY = Phaser.Math.Interpolation.Linear([this.cameras.main.scrollY, newScrollY], 0.05);
+
         } else if (leadPlayer) { 
             this.cameras.main.scrollY -= (this.cameraSpeed * delta) / 1000;
             const targetX = (this.scale.width / 2) - this.cameras.main.width / 2;
             this.cameras.main.scrollX = Phaser.Math.Interpolation.Linear([this.cameras.main.scrollX, targetX], 0.05);
             this.cameras.main.setZoom(Phaser.Math.Interpolation.Linear([this.cameras.main.zoom, 1.2], 0.05));
         }
+
         this.road.y = this.cameras.main.worldView.centerY;
         this.road.tilePositionY = this.cameras.main.scrollY;
+        
         this.obstacleManager.update(leadPlayer);
+        
         this.players.forEach(player => {
             player.score = Math.max(0, Math.floor(-(player.y - this.scale.height) / 10));
             if (this.scoreDisplays.has(player.playerId)) {
                 this.scoreDisplays.get(player.playerId).setText(`${player.name}: ${player.score}`);
             }
         });
+        
         this.checkPlayerElimination();
     }
+    
     checkPlayerElimination() {
         const cameraBounds = this.cameras.main.worldView;
         const playersToEliminate = [];
         const eliminationDelay = 2000;
+
         this.players.forEach(player => {
             if (player.y > cameraBounds.bottom + 50) {
                 if (player.offScreenSince === null) {
@@ -185,6 +218,7 @@ class GameScene extends Phaser.Scene {
                 player.setAlpha(1);
             }
         });
+
         playersToEliminate.forEach(playerId => {
             if (this.players.has(playerId)) {
                 const player = this.players.get(playerId);
@@ -199,10 +233,12 @@ class GameScene extends Phaser.Scene {
                 }
             }
         });
+        
         if (this.isGameRunning && this.players.size === 0) {
             this.endGame();
         }
     }
+
     startCountdown() {
         const countdownText = this.add.text(this.scale.width / 2, this.scale.height / 2, '3', { fontSize: '128px', fill: '#FFF', stroke: '#000', strokeThickness: 8 }).setOrigin(0.5).setScrollFactor(0);
         let count = 3;
