@@ -127,27 +127,6 @@ function main() {
                 if (nicknameError) nicknameError.textContent = "";
             }, 3000);
         });
-        socket.on('available_sessions_list', (sessions) => {
-            searchSessionsButton.textContent = "Chercher des parties";
-            searchSessionsButton.disabled = false;
-            sessionList.innerHTML = '';
-
-            if (sessions.length > 0) {
-                sessions.forEach(session => {
-                    const li = document.createElement('li');
-                    li.textContent = `Session ${session.sessionCode} (${session.playerCount}/10 joueurs)`;
-                    li.addEventListener('click', () => {
-                        sessionCodeInput.value = session.sessionCode;
-                        connect();
-                    });
-                    sessionList.appendChild(li);
-                });
-                sessionListContainer.classList.remove('hidden');
-            } else {
-                setStatus('Aucune session trouvée.');
-                sessionListContainer.classList.add('hidden');
-            }
-        });
     }
 
     function connect() {
@@ -174,31 +153,52 @@ function main() {
         setStatus('Recherche de session...');
         searchSessionsButton.textContent = "Recherche...";
         searchSessionsButton.disabled = true;
+        sessionListContainer.classList.add('hidden');
+        sessionList.innerHTML = '';
         
-        const tempSocket = io(serverUrl, { path: "/racer/socket.io/" });
-
-        const onConnect = () => {
-            tempSocket.emit('request_active_sessions');
-        };
-
-        const onList = (sessions) => {
-            if (!socket) socket = io(serverUrl, { path: "/racer/socket.io/", autoConnect: false });
-            setupSocketEvents();
-            socket.emit('available_sessions_list', sessions);
+        const tempSocket = io(serverUrl, { path: "/racer/socket.io/", timeout: 5000 });
+        
+        const searchTimeout = setTimeout(() => {
             tempSocket.disconnect();
-        };
-
-        tempSocket.on('connect', onConnect);
-        tempSocket.on('available_sessions_list', onList);
-
-        setTimeout(() => {
-            if (tempSocket.connected) {
-                searchSessionsButton.textContent = "Chercher des parties";
-                searchSessionsButton.disabled = false;
-                setStatus("La recherche a échoué. Réessayez.");
-                tempSocket.disconnect();
-            }
+            setStatus('La recherche a échoué. Réessayez.');
+            searchSessionsButton.textContent = "Chercher des parties";
+            searchSessionsButton.disabled = false;
         }, 5000);
+
+        tempSocket.on('connect', () => {
+            tempSocket.emit('request_active_sessions');
+        });
+
+        tempSocket.on('available_sessions_list', (sessions) => {
+            clearTimeout(searchTimeout);
+            searchSessionsButton.textContent = "Chercher des parties";
+            searchSessionsButton.disabled = false;
+
+            if (sessions.length > 0) {
+                setStatus('Sessions trouvées !');
+                sessions.forEach(session => {
+                    const li = document.createElement('li');
+                    li.textContent = `Session ${session.sessionCode} (${session.playerCount}/10 joueurs)`;
+                    li.addEventListener('click', () => {
+                        sessionCodeInput.value = session.sessionCode;
+                        connect();
+                    });
+                    sessionList.appendChild(li);
+                });
+                sessionListContainer.classList.remove('hidden');
+            } else {
+                setStatus('Aucune session trouvée.');
+            }
+            tempSocket.disconnect();
+        });
+
+        tempSocket.on('connect_error', () => {
+            clearTimeout(searchTimeout);
+            tempSocket.disconnect();
+            setStatus('Erreur de connexion au serveur.');
+            searchSessionsButton.textContent = "Chercher des parties";
+            searchSessionsButton.disabled = false;
+        });
     }
 
     function requestReplay() {
@@ -274,9 +274,6 @@ function main() {
             sessionCodeInput.value = sessionCodeFromURL;
             connect();
         } else {
-            socket = io(serverUrl, { path: "/racer/socket.io/", autoConnect: false });
-            setupSocketEvents();
-            socket.connect();
             showView('connect');
         }
     }
@@ -287,7 +284,9 @@ function main() {
         if(nicknameError) nicknameError.textContent = "";
         const newName = nicknameInput.value || 'Joueur';
         sessionStorage.setItem('racerNickname', newName);
-        socket.emit('update_name', { sessionCode, name: newName });
+        if (socket && socket.connected) {
+            socket.emit('update_name', { sessionCode, name: newName });
+        }
     });
     readyButton.addEventListener('click', () => {
         socket.emit('player_ready', { sessionCode });
