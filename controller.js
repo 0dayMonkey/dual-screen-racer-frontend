@@ -12,7 +12,7 @@ function main() {
     const lobbyWrapper = document.getElementById('lobby-wrapper');
     const gameControlsView = document.getElementById('game-controls-view');
     const gameOverWrapper = document.getElementById('game-over-wrapper');
-
+    
     const sessionCodeInput = document.getElementById('session-code-input');
     const connectButton = document.getElementById('connect-button');
     const searchSessionsButton = document.getElementById('search-sessions-button');
@@ -36,34 +36,50 @@ function main() {
         if (statusDiv) statusDiv.textContent = message;
     }
 
-    function showView(viewName) {
-        if (gameOverTimer) {
-            clearInterval(gameOverTimer);
-            gameOverTimer = null;
-        }
-
-        connectionWrapper.classList.add('hidden');
-        lobbyWrapper.classList.add('hidden');
-        gameControlsView.classList.add('hidden');
-        gameOverWrapper.classList.add('hidden');
-        const viewMap = {
-            'connect': connectionWrapper,
-            'lobby': lobbyWrapper,
-            'controls': gameControlsView,
-            'gameover': gameOverWrapper
-        };
-        if (viewMap[viewName]) {
-            viewMap[viewName].classList.remove('hidden');
-        }
-        setStatus(statusMap[viewName] || 'En attente...');
-    }
-    
     const statusMap = {
         'connect': 'En attente...',
         'lobby': 'Connecté. En attente des joueurs...',
         'controls': 'Partie en cours',
         'gameover': 'Partie terminée !'
     };
+
+    function showView(viewName) {
+        if (gameOverTimer) {
+            clearInterval(gameOverTimer);
+            gameOverTimer = null;
+        }
+
+        // Retire 'active' de toutes les vues pour les cacher/animer leur sortie
+        connectionWrapper.classList.remove('active');
+        lobbyWrapper.classList.remove('active');
+        gameControlsView.classList.remove('active');
+        gameOverWrapper.classList.remove('active');
+
+        const viewMap = {
+            'connect': connectionWrapper,
+            'lobby': lobbyWrapper,
+            'controls': gameControlsView,
+            'gameover': gameOverWrapper
+        };
+        
+        // Attendre un court instant pour que l'animation de sortie se termine avant de cacher
+        setTimeout(() => {
+            connectionWrapper.classList.add('hidden');
+            lobbyWrapper.classList.add('hidden');
+            gameControlsView.classList.add('hidden');
+            gameOverWrapper.classList.add('hidden');
+            
+            if (viewMap[viewName]) {
+                const activeView = viewMap[viewName];
+                activeView.classList.remove('hidden');
+                // Forcer un reflow pour que l'animation d'entrée fonctionne
+                void activeView.offsetWidth; 
+                activeView.classList.add('active');
+            }
+        }, 300); // Doit correspondre à la durée de la transition CSS
+
+        setStatus(statusMap[viewName] || 'En attente...');
+    }
 
     function setupSocketEvents() {
         socket.on('disconnect', () => {
@@ -108,7 +124,6 @@ function main() {
             showView('gameover');
 
             let countdown = 30;
-            const originalStatus = statusMap['gameover'];
             setStatus(`Retour au lobby dans ${countdown}s...`);
 
             gameOverTimer = setInterval(() => {
@@ -116,7 +131,7 @@ function main() {
                 if (countdown > 0) {
                     setStatus(`Retour au lobby dans ${countdown}s...`);
                 } else {
-                    setStatus(originalStatus);
+                    setStatus(statusMap['gameover']);
                     clearInterval(gameOverTimer);
                 }
             }, 1000);
@@ -136,6 +151,7 @@ function main() {
             return;
         }
         setStatus('Connexion...');
+        connectButton.disabled = true;
         if (!socket || !socket.connected) {
             socket = io(serverUrl, {
                 path: "/racer/socket.io/"
@@ -143,15 +159,16 @@ function main() {
             setupSocketEvents();
             socket.on('connect', () => {
                 socket.emit('join_session', { sessionCode });
+                connectButton.disabled = false;
             });
         } else {
             socket.emit('join_session', { sessionCode });
+            connectButton.disabled = false;
         }
     }
     
     function searchForActiveSessions() {
         setStatus('Recherche de session...');
-        searchSessionsButton.textContent = "Recherche...";
         searchSessionsButton.disabled = true;
         sessionListContainer.classList.add('hidden');
         sessionList.innerHTML = '';
@@ -161,7 +178,6 @@ function main() {
         const searchTimeout = setTimeout(() => {
             tempSocket.disconnect();
             setStatus('La recherche a échoué. Réessayez.');
-            searchSessionsButton.textContent = "Chercher des parties";
             searchSessionsButton.disabled = false;
         }, 5000);
 
@@ -171,7 +187,6 @@ function main() {
 
         tempSocket.on('available_sessions_list', (sessions) => {
             clearTimeout(searchTimeout);
-            searchSessionsButton.textContent = "Chercher des parties";
             searchSessionsButton.disabled = false;
 
             if (sessions.length > 0) {
@@ -185,8 +200,7 @@ function main() {
                         sessionListContainer.classList.add('hidden');
                         sessionCodeInput.value = '';
                         connectButton.disabled = true;
-                        searchSessionsButton.disabled = true;
-
+                        
                         for (const digit of session.sessionCode) {
                             sessionCodeInput.value += digit;
                             await sleep(120);
@@ -207,7 +221,6 @@ function main() {
             clearTimeout(searchTimeout);
             tempSocket.disconnect();
             setStatus('Erreur de connexion au serveur.');
-            searchSessionsButton.textContent = "Chercher des parties";
             searchSessionsButton.disabled = false;
         });
     }
@@ -221,15 +234,16 @@ function main() {
 
     function switchControlMode(newMode) {
         controlMode = newMode;
+        arrowsModeBtn.classList.remove('active');
+        wheelModeBtn.classList.remove('active');
+        arrowsControls.classList.add('hidden');
+        wheelControls.classList.add('hidden');
+
         if (newMode === 'arrows') {
             arrowsModeBtn.classList.add('active');
-            wheelModeBtn.classList.remove('active');
             arrowsControls.classList.remove('hidden');
-            wheelControls.classList.add('hidden');
         } else {
-            arrowsModeBtn.classList.remove('active');
             wheelModeBtn.classList.add('active');
-            arrowsControls.classList.add('hidden');
             wheelControls.classList.remove('hidden');
         }
     }
@@ -249,15 +263,11 @@ function main() {
         event.preventDefault();
         const rect = steeringWheel.getBoundingClientRect();
         const centerX = rect.left + rect.width / 2;
-        const centerY = rect.top + rect.height / 2;
         const clientX = event.touches ? event.touches[0].clientX : event.clientX;
-        const clientY = event.touches ? event.touches[0].clientY : event.clientY;
-        const deltaX = clientX - centerX;
-        const deltaY = clientY - centerY;
-        let angle = Math.atan2(deltaY, deltaX) * (180 / Math.PI) + 90;
-        angle = Math.max(-90, Math.min(90, angle));
-        steeringWheel.style.transform = `rotate(${angle}deg)`;
-        socket.emit('steer', { sessionCode, angle });
+        const angle = ((clientX - centerX) / (rect.width / 2)) * 90;
+        const clampedAngle = Math.max(-90, Math.min(90, angle));
+        steeringWheel.style.transform = `rotate(${clampedAngle}deg)`;
+        socket.emit('steer', { sessionCode, angle: clampedAngle });
     }
 
     function stopSteering() {
@@ -267,7 +277,7 @@ function main() {
         steeringWheel.style.transform = 'rotate(0deg)';
         socket.emit('steer', { sessionCode, angle: 0 });
         setTimeout(() => {
-            steeringWheel.style.transition = 'transform 0.1s linear';
+            steeringWheel.style.transition = '';
         }, 200);
     }
 
