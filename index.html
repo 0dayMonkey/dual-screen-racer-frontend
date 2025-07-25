@@ -5,23 +5,36 @@
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>Dual Screen Racer - Écran de Jeu</title>
     <style>
-        /* On supprime toute marge et on s'assure que le canevas remplit l'espace */
         * {
             margin: 0;
             padding: 0;
         }
         html, body {
-            overflow: hidden; /* Empêche les barres de défilement */
+            overflow: hidden;
             height: 100%;
+            background-color: #1c1c1e;
         }
         canvas {
-            display: block; /* Supprime l'espace sous le canevas */
+            display: block;
+        }
+        #qrcode-container {
+            position: absolute;
+            top: 170px;
+            left: 50%;
+            transform: translateX(-50%);
+            background-color: rgba(255, 255, 255, 0.1);
+            border-radius: 16px;
+            padding: 15px;
+            border: 1px solid rgba(255, 255, 255, 0.2);
         }
     </style>
 </head>
 <body>
+    <div id="qrcode-container"></div>
+
     <script src="https://cdn.socket.io/4.7.5/socket.io.min.js"></script>
     <script src="https://cdn.jsdelivr.net/npm/phaser@3.80.1/dist/phaser-arcade-physics.min.js"></script>
+    <script src="https://cdn.jsdelivr.net/npm/qrious@4.0.2/dist/qrious.min.js"></script>
     <script src="graphics.js"></script>
 
     <script src="js/components/Player.js"></script>

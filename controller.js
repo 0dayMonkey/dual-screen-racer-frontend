@@ -244,6 +244,19 @@ function main() {
         isDraggingWheel = true;
         handleWheelMove(event);
     }
+    
+    function initialize() {
+        const urlParams = new URLSearchParams(window.location.search);
+        const sessionCodeFromURL = urlParams.get('sessionCode');
+
+        if (sessionCodeFromURL && sessionCodeFromURL.length === 6) {
+            sessionCodeInput.value = sessionCodeFromURL;
+            connect();
+        } else {
+            showView('connect');
+            checkForActiveSessions();
+        }
+    }
 
     connectButton.addEventListener('click', connect);
     nicknameInput.addEventListener('input', () => socket.emit('update_name', {
@@ -280,8 +293,8 @@ function main() {
     window.addEventListener('touchmove', handleWheelMove);
     window.addEventListener('mouseup', stopSteering);
     window.addEventListener('touchend', stopSteering);
-    showView('connect');
-    checkForActiveSessions();
+    
+    initialize();
 }
 
 main();
